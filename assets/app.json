@@ -1,0 +1,43 @@
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+
+async function sendMessage() {
+    const message = input.value;
+    appendMessage("You", message);
+
+    const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+    });
+
+    const data = await res.json();
+    appendMessage("JARVIS", data.reply);
+
+    speak(data.reply);
+}
+
+function appendMessage(sender, text) {
+    chat.innerHTML += `<p><b>${sender}:</b> ${text}</p>`;
+}
+
+function speak(text) {
+    const speech = new SpeechSynthesisUtterance(text);
+
+    // You can tweak this for a more "Jarvis-like" tone
+    speech.pitch = 0.8;
+    speech.rate = 1;
+
+    speechSynthesis.speak(speech);
+}
+
+function startVoice() {
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+
+    recognition.onresult = (event) => {
+        input.value = event.results[0][0].transcript;
+        sendMessage();
+    };
+
+    recognition.start();
+}
