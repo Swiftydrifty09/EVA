@@ -87,11 +87,11 @@ function appendMessage(sender, message) {
 }
 
 async function sendMessage() {
-  const userMessage = inputEl.value.trim();
+  const userMessage = inputEl ? inputEl.value.trim() : currentTranscript;
   if (!userMessage) return;
 
   appendMessage("user", userMessage);
-  inputEl.value = "";
+  if (inputEl) inputEl.value = "";
 
   try {
     const response = await getJarvisResponse(userMessage);
@@ -140,6 +140,9 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+let currentRecognition = null;
+let currentTranscript = "";
+
 function startVoice() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
@@ -147,28 +150,86 @@ function startVoice() {
     return;
   }
 
-  const recognition = new SpeechRecognition();
-  recognition.lang = 'en-US';
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
+  currentRecognition = new SpeechRecognition();
+  currentRecognition.lang = 'en-US';
+  currentRecognition.interimResults = false;
+  currentRecognition.maxAlternatives = 1;
+  currentRecognition.continuous = true;
 
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    inputEl.value = transcript;
-    sendMessage();
+  currentRecognition.onstart = () => {
+    showVoiceMode();
   };
 
-  recognition.onerror = (event) => {
+  currentRecognition.onresult = (event) => {
+    currentTranscript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+    if (currentTranscript.includes("jarvis")) {
+      const command = currentTranscript.replace("jarvis", "").trim();
+      if (command) {
+        currentTranscript = command;
+        sendMessage();
+      } else {
+        appendMessage("jarvis", "Yes, sir? How can I assist you?");
+      }
+    } else {
+      sendMessage();
+    }
+  };
+
+  currentRecognition.onerror = (event) => {
     appendMessage("jarvis", `Speech recognition error: ${event.error}`);
+    stopVoiceMode();
   };
 
-  recognition.start();
+  currentRecognition.onend = () => {
+    stopVoiceMode();
+  };
+
+  currentRecognition.start();
 }
 
-sendBtn.addEventListener("click", sendMessage);
-inputEl.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    sendMessage();
+function showVoiceMode() {
+  sphereEl.style.display = 'block';
+  createSphereDots();
+  voiceBtn.style.display = 'none';
+  stopVoiceBtn.style.display = 'inline-block';
+  statusEl.textContent = "Status: LISTENING";
+}
+
+function stopVoiceMode() {
+  if (currentRecognition) {
+    currentRecognition.stop();
+    currentRecognition = null;
   }
-});
+  sphereEl.style.display = 'none';
+  removeSphereDots();
+  voiceBtn.style.display = 'inline-block';
+  stopVoiceBtn.style.display = 'none';
+  statusEl.textContent = "Status: JARVIS ONLINE";
+}
+
+function createSphereDots() {
+  for (let i = 0; i < 20; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    dot.style.animationDelay = `${i * 0.15}s`;
+    sphereEl.appendChild(dot);
+  }
+}
+
+function removeSphereDots() {
+  sphereEl.innerHTML = '';
+}
+
+stopVoiceBtn.addEventListener("click", stopVoiceMode);
 voiceBtn.addEventListener("click", startVoice);
+
+if (sendBtn) {
+  sendBtn.addEventListener("click", sendMessage);
+}
+if (inputEl) {
+  inputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      sendMessage();
+    }
+  });
+}
