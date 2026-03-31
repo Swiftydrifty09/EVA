@@ -1,23 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>JARVIS AI</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JARVIS</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-    <div class="container">
-        <h1>JARVIS</h1>
+  <div class="container">
+    <h1>JARVIS</h1>
 
-        <div id="status">Status: Ready for voice activation</div>
-        <div id="chat"></div>
+    <div id="chat"></div>
 
-        <button id="voiceBtn">🎤 Activate Voice</button>
-        <button id="stopVoiceBtn">Stop Voice</button>
-    </div>
+    <input id="input" type="text" placeholder="Type a command..." />
+    <button id="sendBtn">Send</button>
+    <button id="micBtn">🎤 Speak</button>
+  </div>
 
-    <div id="sphere"></div>
-
-    <script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>

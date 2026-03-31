@@ -1,126 +1,34 @@
 body {
-    background: linear-gradient(135deg, #000000, #001122);
-    color: #00BFFF;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    text-align: center;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0a0a0a;
+  color: #00ffcc;
 }
 
 .container {
-    margin-top: 50px;
-    position: relative;
-    z-index: 10;
-}
-
-h1 {
-    font-size: 3em;
-    text-shadow: 0 0 20px #00BFFF;
-    margin-bottom: 20px;
-}
-
-#status {
-    font-size: 1.2em;
-    margin-bottom: 20px;
-    text-shadow: 0 0 10px #00BFFF;
+  max-width: 600px;
+  margin: 50px auto;
+  text-align: center;
 }
 
 #chat {
-    height: 300px;
-    overflow-y: auto;
-    border: 2px solid #00BFFF;
-    margin: 20px auto;
-    padding: 10px;
-    background: rgba(0, 0, 0, 0.8);
-    border-radius: 10px;
-    box-shadow: 0 0 20px #00BFFF;
-    width: 80%;
-    max-width: 600px;
+  height: 300px;
+  overflow-y: auto;
+  border: 1px solid #00ffcc;
+  padding: 10px;
+  margin-bottom: 10px;
+  text-align: left;
 }
 
-.message {
-    margin: 10px 0;
-    padding: 10px;
-    border-radius: 10px;
-    animation: fadeIn 0.5s;
-}
-
-.message.user {
-    text-align: right;
-    background: rgba(0, 191, 255, 0.2);
-    color: #FFFFFF;
-    border: 1px solid #00BFFF;
-}
-
-.message.jarvis {
-    text-align: left;
-    background: rgba(255, 255, 255, 0.1);
-    color: #00BFFF;
-    border: 1px solid #FFFFFF;
-}
-
-#input {
-    width: 60%;
-    padding: 15px;
-    background: rgba(0, 0, 0, 0.8);
-    color: #00BFFF;
-    border: 2px solid #00BFFF;
-    border-radius: 25px;
-    font-size: 1em;
-    margin: 10px;
-    box-shadow: 0 0 10px #00BFFF;
+input {
+  width: 70%;
+  padding: 10px;
 }
 
 button {
-    padding: 15px 30px;
-    background: rgba(0, 191, 255, 0.2);
-    color: #00BFFF;
-    border: 2px solid #00BFFF;
-    border-radius: 25px;
-    cursor: pointer;
-    font-size: 1em;
-    margin: 10px;
-    transition: all 0.3s;
-    box-shadow: 0 0 10px #00BFFF;
-}
-
-button:hover {
-    background: rgba(0, 191, 255, 0.5);
-    box-shadow: 0 0 20px #00BFFF;
-}
-
-#stopVoiceBtn {
-    display: none;
-}
-
-#sphere {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 300px;
-    height: 300px;
-    display: none;
-    z-index: 5;
-}
-
-.dot {
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    background: radial-gradient(circle, #FFA500, #FF4500);
-    border-radius: 50%;
-    box-shadow: 0 0 10px #FFA500, 0 0 20px #FFA500, 0 0 30px #FFA500;
-    animation: orbit 3s linear infinite, pulse 2s ease-in-out infinite alternate;
-}
-
-@keyframes orbit {
-    from { transform: rotate(0deg) translateX(150px) rotate(0deg); }
-    to { transform: rotate(360deg) translateX(150px) rotate(-360deg); }
-}
-
-@keyframes pulse {
-    from { transform: scale(1); opacity: 0.8; }
-    to { transform: scale(1.2); opacity: 1; }
+  padding: 10px;
+  margin-left: 5px;
+  cursor: pointer;
+  background: #00ffcc;
+  border: none;
 }

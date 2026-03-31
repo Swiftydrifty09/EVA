@@ -2,12 +2,11 @@
   "name": "jarvis-ai",
   "version": "1.0.0",
   "type": "module",
-  "dependencies": {
-    "express": "^4.18.2",
-    "dotenv": "^16.0.0",
-    "node-fetch": "^3.3.2"
-  },
+  "main": "server.js",
   "scripts": {
-    "start": "node services/server.js"
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
   }
 }
