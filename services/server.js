@@ -1,13 +1,14 @@
 import express from "express";
+import dotenv from "dotenv";
 import path from "path";
 
-const app = express();
-app.use(express.json());
+dotenv.config();
 
-// Serve frontend
+const app = express();
+
+app.use(express.json());
 app.use(express.static(path.resolve("public")));
 
-// API route
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
 
@@ -15,14 +16,13 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ reply: "No message provided." });
   }
 
-  // Placeholder logic (replace with AI later)
-  const reply = `You said: ${message}`;
-
-  res.json({ reply });
+  return res.json({
+    reply: `You said: ${message}`
+  });
 });
 
-// Start server
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log(`JARVIS running on http://localhost:${PORT}`);
+  console.log(`Running on port ${PORT}`);
 });
