@@ -10,6 +10,9 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.resolve("public")));
 
+app.get("/", (req, res) => {
+  res.sendFile(path.resolve("public/index.html"));
+});
 // API route
 app.post("/api/chat", async (req, res) => {
   try {
