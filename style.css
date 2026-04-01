@@ -41,3 +41,33 @@ input {
   text-align: left;
   color: cyan;
 }
+:root {
+  --primary: #00f0ff;
+  --accent: #ff3b3b;
+  --bg: #05060a;
+  --glass: rgba(0, 255, 255, 0.08);
+}
+.hud-panel {
+  background: var(--glass);
+  border: 1px solid rgba(0,255,255,0.3);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 20px rgba(0,255,255,0.2);
+  border-radius: 12px;
+}
+.glow {
+  color: var(--primary);
+  text-shadow: 0 0 8px var(--primary);
+}
+.scanline::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: rgba(0,255,255,0.4);
+  animation: scan 3s linear infinite;
+}
+
+@keyframes scan {
+  0% { top: 0 }
+  100% { top: 100% }
+}

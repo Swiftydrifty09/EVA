@@ -1,30 +1,41 @@
-import fs from "fs";
+const { getMemory, addToMemory } = require("../../services/memory");
+const { getAIResponse } = require("../../services/ai");
 
-const DB_FILE = "./memory.json";
+router.post("/", async (req, res) => {
+  try {
+    const { message, sessionId } = req.body;
 
-function loadDB() {
-  if (!fs.existsSync(DB_FILE)) return {};
-  return JSON.parse(fs.readFileSync(DB_FILE));
-}
+    if (!message) {
+      return res.status(400).json({ error: "Missing message" });
+    }
 
-function saveDB(db) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Transfer-Encoding", "chunked");
 
-export async function getMemory(userId) {
-  const db = loadDB();
-  return db[userId] || [];
-}
+    const memory = getMemory(sessionId);
 
-export async function saveMemory(userId, message) {
-  const db = loadDB();
+    const messages = [
+      {
+        role: "system",
+        content: "You are JARVIS. Answer clearly and directly."
+      },
+      ...memory,
+      {
+        role: "user",
+        content: message
+      }
+    ];
 
-  if (!db[userId]) db[userId] = [];
+    // store user message BEFORE response
+    addToMemory(sessionId, { role: "user", content: message });
 
-  db[userId].push(message);
+    const fullResponse = await getAIResponse(messages, res);
 
-  // Optional: limit memory size
-  db[userId] = db[userId].slice(-20);
+    // store AI response AFTER
+    addToMemory(sessionId, { role: "assistant", content: fullResponse });
 
-  saveDB(db);
-}
+  } catch (err) {
+    console.error("ROUTE ERROR:", err);
+    res.status(500).end();
+  }
+});

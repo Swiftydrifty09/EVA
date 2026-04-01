@@ -1,13 +1,13 @@
-import fs from "fs";
-import OpenAI from "openai";
+const recognition = new (window.SpeechRecognition ||
+  window.webkitSpeechRecognition)();
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+recognition.continuous = false;
+recognition.interimResults = false;
 
-export async function transcribeAudio(filePath) {
-  const transcription = await client.audio.transcriptions.create({
-    file: fs.createReadStream(filePath),
-    model: "whisper-1"
-  });
+recognition.onresult = async (event) => {
+  const transcript = event.results[0][0].transcript;
 
-  return transcription.text;
-}
+  sendToBackend(transcript);
+};
+
+recognition.start();

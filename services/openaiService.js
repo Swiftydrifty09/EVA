@@ -5,11 +5,10 @@ const client = new OpenAI({
 });
 
 export async function getChatCompletionStream(messages) {
-  const stream = await client.chat.completions.create({
+  return await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages,
-    stream: true
+    stream: true,
+    temperature: 0.7
   });
-
-  return stream;
 }

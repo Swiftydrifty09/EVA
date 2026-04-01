@@ -1,186 +1,228 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <link rel="stylesheet" href="style.css">
-<script src="script.js" defer></script>
-<meta charset="utf-8">
-<title>J.A.R.V.I.S</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JARVIS HUD</title>
 
 <style>
+:root {
+  --primary: #00f0ff;
+  --accent: #ff3b3b;
+  --bg: #05060a;
+  --glass: rgba(0, 255, 255, 0.08);
+}
+
 body {
   margin: 0;
-  font-family: Helvetica, sans-serif;
-  background: linear-gradient(to right, #000000, #000203);
-  color: rgb(21, 116, 139);
-  text-align: center;
+  font-family: 'Orbitron', sans-serif;
+  background: var(--bg);
+  color: var(--primary);
+  overflow: hidden;
 }
 
-/* CENTERING */
-.vertical-center {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-/* JARVIS HUD */
-svg.jarvis {
-  margin-bottom: 20px;
-}
-
-/* INPUT */
-input {
+.hud {
+  display: grid;
+  grid-template-columns: 300px 1fr 300px;
+  grid-template-rows: 80px 1fr 100px;
+  height: 100vh;
+  gap: 10px;
   padding: 10px;
-  border-radius: 8px;
-  border: none;
-  text-align: center;
-  width: 250px;
 }
 
-/* MESSAGE LOG */
-#messageLog {
-  margin-top: 20px;
-  max-width: 500px;
-  white-space: pre-wrap;
+.panel {
+  background: var(--glass);
+  border: 1px solid rgba(0,255,255,0.3);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 20px rgba(0,255,255,0.2);
+  border-radius: 12px;
+  padding: 10px;
+  position: relative;
 }
 
-/* USER + AI */
-.user {
-  text-align: right;
-  color: rgb(0, 225, 255);
+.glow {
+  text-shadow: 0 0 10px var(--primary);
 }
 
-.ai {
-  text-align: left;
-  color: rgb(255, 196, 0);
+/* Layout Areas */
+.header { grid-column: 1 / 4; }
+.left { grid-row: 2; }
+.center { grid-row: 2; }
+.right { grid-row: 2; }
+.footer { grid-column: 1 / 4; }
+
+/* Chat */
+.chat-box {
+  height: 100%;
+  overflow-y: auto;
 }
 
-/* WAVE */
-.wave svg {
+.message {
+  margin: 5px 0;
+}
+
+.user { color: white; }
+.ai { color: var(--primary); }
+
+/* Input */
+.input-container {
+  display: flex;
+  gap: 10px;
+}
+
+input {
+  flex: 1;
+  padding: 10px;
   background: transparent;
-  margin-top: 20px;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+}
+
+button {
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  cursor: pointer;
+}
+
+button:hover {
+  background: rgba(0,255,255,0.2);
+}
+
+/* Orb */
+.orb {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #00f0ff, transparent);
+  margin: auto;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Scanline */
+.panel::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: rgba(0,255,255,0.3);
+  animation: scan 4s linear infinite;
+}
+
+@keyframes scan {
+  0% { top: 0 }
+  100% { top: 100% }
 }
 </style>
 </head>
 
 <body>
+<div class="hud">
 
-<div class="vertical-center">
-
-  <!-- JARVIS TITLE -->
-  <h2>J.A.R.V.I.S</h2>
-
-  <!-- JARVIS HUD -->
-  <svg class="jarvis" width="210" height="210">
-    <circle cx="105" cy="105" r="100" stroke="#B4F6FB" stroke-width="2" fill="none" stroke-dasharray="50,5"/>
-    <circle cx="105" cy="105" r="95" stroke="#64E6EF" stroke-width="1.5" fill="none"/>
-
-    <circle cx="105" cy="105" r="80" stroke="#B4F6FB" stroke-width="10" fill="none" stroke-dasharray="2,2.29">
-      <animateTransform attributeName="transform" type="rotate"
-        from="0 105 105" to="360 105 105"
-        dur="10s" repeatCount="indefinite"/>
-    </circle>
-
-    <circle cx="105" cy="105" r="61" stroke="#B4F6FB" stroke-width="2" fill="none" stroke-dasharray="50,25">
-      <animateTransform attributeName="transform" type="rotate"
-        from="0 105 105" to="-360 105 105"
-        dur="10s" repeatCount="indefinite"/>
-    </circle>
-
-    <circle cx="105" cy="105" r="50" stroke="#64E6EF" stroke-width="15" fill="none"/>
-    <circle cx="105" cy="105" r="40" stroke="#64E6EF" stroke-width="2" fill="none"/>
-
-    <path d="M105 120 L130 95 L80 95 Z"
-      fill="#D1FBFC" stroke="#B4F6FB" stroke-width="5"/>
-  </svg>
-
-  <!-- INPUT -->
-  <input id="input" placeholder="Say something..." onkeydown="handleKey(event)">
-
-  <!-- WAVE -->
-  <div class="wave">
-    <svg width="200" height="50">
-      <polyline id="line"/>
-      <polyline id="line2"/>
-      <polyline id="line3"/>
-    </svg>
+  <div class="panel header glow">
+    JARVIS SYSTEM ONLINE
   </div>
 
-  <!-- LOG -->
-  <div id="messageLog"></div>
+  <div class="panel left">
+    <h3 class="glow">WEATHER</h3>
+    <div id="weather">Loading...</div>
+  </div>
+
+  <div class="panel center">
+    <div class="chat-box" id="chat"></div>
+  </div>
+
+  <div class="panel right">
+    <h3 class="glow">SYSTEM</h3>
+    <div>CPU: 42%</div>
+    <div>Memory: 68%</div>
+    <div>Status: ONLINE</div>
+    <div class="orb"></div>
+  </div>
+
+  <div class="panel footer">
+    <div class="input-container">
+      <input id="input" placeholder="Ask JARVIS..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
 
 </div>
 
 <script>
+const chat = document.getElementById("chat");
 
-/* ========================
-   MESSAGE SYSTEM
-======================== */
-function logMessage(text, type) {
+function addMessage(text, cls) {
   const div = document.createElement("div");
-  div.className = type;
+  div.className = "message " + cls;
   div.textContent = text;
-  document.getElementById("messageLog").appendChild(div);
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
 }
 
-/* ========================
-   INPUT HANDLER
-======================== */
-function handleKey(e) {
-  if (e.key === "Enter") {
-    const input = document.getElementById("input");
-    const text = input.value;
-    input.value = "";
+async function sendMessage() {
+  const input = document.getElementById("input");
+  const message = input.value;
+  input.value = "";
 
-    logMessage("You: " + text, "user");
+  addMessage("You: " + message, "user");
 
-    respond(text);
+  const res = await fetch("/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, userId: "default" })
+  });
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+
+  let aiMessage = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value);
+
+    if (chunk.includes("[DONE]")) break;
+
+    aiMessage += chunk.replace("data:", "");
+
+    let last = chat.querySelector(".ai:last-child");
+    if (!last) {
+      last = document.createElement("div");
+      last.className = "message ai";
+      chat.appendChild(last);
+    }
+
+    last.textContent = "JARVIS: " + aiMessage;
   }
 }
 
-/* ========================
-   BASIC AI RESPONSE
-======================== */
-function respond(text) {
-  let reply = "Processing...";
+// Simple weather fetch
+async function loadWeather() {
+  try {
+    const res = await fetch("https://api.openweathermap.org/data/2.5/weather?q=Sylvania&units=imperial&appid=YOUR_API_KEY");
+    const data = await res.json();
 
-  if (text.toLowerCase().includes("hello")) {
-    reply = "Hello, sir.";
-  } else if (text.toLowerCase().includes("time")) {
-    reply = new Date().toLocaleTimeString();
-  } else {
-    reply = "I am still learning, sir.";
+    document.getElementById("weather").innerHTML = `
+      ${data.name}<br>
+      ${data.main.temp}°F<br>
+      ${data.weather[0].main}
+    `;
+  } catch {
+    document.getElementById("weather").textContent = "Weather unavailable";
   }
-
-  setTimeout(() => {
-    logMessage("JARVIS: " + reply, "ai");
-  }, 500);
 }
 
-/* ========================
-   WAVE ANIMATION
-======================== */
-let shift = 0;
-
-function generateWave(id, amp, freq) {
-  let points = "";
-  for (let x = 0; x <= 200; x += 2) {
-    let y = 25 + amp * Math.sin((x + shift) * freq);
-    points += `${x},${y} `;
-  }
-  document.getElementById(id).setAttribute("points", points);
-}
-
-function animateWave() {
-  shift += 2;
-  generateWave("line", 5, 0.05);
-  generateWave("line2", 8, 0.04);
-  generateWave("line3", 10, 0.08);
-}
-
-setInterval(animateWave, 30);
-
+loadWeather();
 </script>
 
 </body>

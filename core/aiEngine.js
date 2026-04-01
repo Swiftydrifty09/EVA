@@ -2,21 +2,41 @@ import { getChatCompletionStream } from "../services/openaiService.js";
 import { getMemory, saveMemory } from "../services/memoryService.js";
 
 export async function handleUserMessage(userId, message) {
-  // 1. Load memory/context
   const memory = await getMemory(userId);
 
-  // 2. Build context
   const messages = [
-    { role: "system", content: "You are JARVIS, a highly intelligent AI assistant." },
+    {
+      role: "system",
+      content: `
+You are JARVIS.
+Respond clearly, directly, and intelligently.
+Always answer the user's question.
+Never stall or say you are "learning".
+      `.trim()
+    },
     ...memory,
     { role: "user", content: message }
   ];
 
-  // 3. Stream response
   const stream = await getChatCompletionStream(messages);
 
-  // 4. Save interaction (async)
-  saveMemory(userId, { role: "user", content: message });
-  
-  return stream;
+  // Wrap stream so we can capture response
+  async function* streamWrapper() {
+    let fullResponse = "";
+
+    for await (const chunk of stream) {
+      const text = chunk.choices[0]?.delta?.content || "";
+
+      if (text) {
+        fullResponse += text;
+        yield chunk;
+      }
+    }
+
+    // Save BOTH sides
+    await saveMemory(userId, { role: "user", content: message });
+    await saveMemory(userId, { role: "assistant", content: fullResponse });
+  }
+
+  return streamWrapper();
 }

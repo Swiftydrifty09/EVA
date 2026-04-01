@@ -1,16 +1,27 @@
-export async function getCurrentTime() {
-  return new Date().toLocaleString();
-}
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "get_time",
+      description: "Get current time",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  }
+];
 
-export function calculate(expression) {
-  try {
-    return eval(expression); // ⚠️ safe only if you control input
-  } catch {
-    return "Invalid expression";
+async function runTool(name, args) {
+  switch (name) {
+    case "get_time":
+      return new Date().toLocaleTimeString();
+    default:
+      return "Tool not found";
   }
 }
 
-export async function searchWeb(query) {
-  // Placeholder – later connect to a search API
-  return `Search results for: ${query}`;
-}
+module.exports = {
+  tools,
+  runTool
+};
