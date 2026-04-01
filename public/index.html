@@ -1,27 +1,64 @@
-<!DOCTYPE html>
-<html lang="en">
+<!-- More info: https://github.com/hchiam/language-user-interface -->
+
 <head>
-  <meta charset="UTF-8">
-  <title>JARVIS</title>
+  <title>LUI</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!--   material design -->
+  <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+
+  <!-- bootstrap: -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script> -->
+
+  <!-- jquery -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+  <!-- so it can talk back: -->
+  <script src='https://code.responsivevoice.org/responsivevoice.js'></script>
+
+  <!-- local files: -->
+  <link rel='stylesheet' href='style.css' />
+  <script type="text/javascript" src="brain.js" ></script>
 </head>
-<body>
-  <h1>JARVIS is running</h1>
-  <input id="input" placeholder="Type..." />
-  <button onclick="send()">Send</button>
 
-  <script>
-    async function send() {
-      const message = document.getElementById("input").value;
+<body onload="welcome()">
 
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message })
-      });
+  <center>
+    <p id="gofullpage">Full page view: <a href="https://codepen.io/hchiam/full/WOLOJG" target="_blank">here</a></p>
+    <p id='use-chrome'></p>
+    <p id='use-laptop'></p>
+    <p id='fillertext'></p>
+    <p><b>More info: </b>
+      <a href='https://github.com/hchiam/language-user-interface' target="_blank">github.com/hchiam/language-user-interface</a></p>
+    <p><b>Web speech API reference: </b><a href='https://codepen.io/hchiam/pen/gGamzv' target="_blank">codepen.io/hchiam/pen/gGamzv</a></p>
+    <p>This is an old project that <a href="https://github.com/hchiam/language-user-interface/blob/master/brain.js" target="_blank" rel="noopener noreferrer">does not use an LLM</a>.</p>
+  </center>
 
-      const data = await res.json();
-      alert(data.reply);
-    }
-  </script>
+  <div class="vertical-center">
+    <div id='inputArea' class="container-fluid my-well w3-card" style="text-align:center;">
+      <svg width="50" height="50" 
+           onclick='clicked();'
+           class='w3-card 
+                  w3-hover-shadow'>
+        <polyline id='line'/>
+        <polyline id='line2'/> 
+        <polyline id='line3'/>
+      </svg>
+      <div style="text-align:center;">
+        <progress id='countDownWaiting' value="0" max="100"></progress>
+      </div>
+      <input autofocus id='input' type='text' oninput="converse()" onkeydown="userWantsAnswerNow(event);" size='30' placeholder="Start by typing/saying 'computer'" class='w3-card w3-hover-shadow w3-hover-grey w3-ripple' title="For example: 'computer what time is it'."/>
+    </div>
+    <span id='programming-area' contenteditable="true" oninput="userEditedCode()" class="w3-card w3-hover-shadow"></span>
+    <p id='messageLog' class="container-fluid my-well w3-card"></p>
+    <a class="vertical-center" href="https://goo.gl/forms/Nwf8TXvOW2vE2OHA3" target="_blank">Feedback?</a>
+  </div>
+
+  <p id='player'></p>
+
+  <script src='https://rawgit.com/hchiam/webApp_MachineLearning_Gesture/master/detect-gesture-import.js'></script>
+
 </body>
-</html>

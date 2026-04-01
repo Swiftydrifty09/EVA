@@ -1,34 +1,125 @@
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #0a0a0a;
-  color: #00ffcc;
+.vertical-center {
+  min-height: 100%; /* for browsers that DON'T support vh unit */
+  min-height: 100vh;
+
+  display: -webkit-flex;
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+
+  padding: 5%;
 }
 
-.container {
-  max-width: 600px;
-  margin: 50px auto;
-  text-align: center;
-}
-
-#chat {
-  height: 300px;
-  overflow-y: auto;
-  border: 1px solid #00ffcc;
+.my-well {
+  background: whitesmoke;
   padding: 10px;
-  margin-bottom: 10px;
-  text-align: left;
+  margin: 10px;
+  border-radius: 5px;
 }
 
 input {
-  width: 70%;
-  padding: 10px;
+  border: none;
+  padding: 5px;
+  border-radius: 5px;
 }
 
-button {
-  padding: 10px;
-  margin-left: 5px;
-  cursor: pointer;
-  background: #00ffcc;
-  border: none;
+#messageLog {
+/*   margin: 20%; */
+  white-space: pre-wrap; /* to preserve spaces and newlines */
+  max-width: 640px;
+}
+
+#log-LUI, #log-user, #log-LUI-suggestion {
+  padding: 5px;
+  font-weight: bold;
+
+  border-radius: 10px;
+}
+
+#log-LUI {
+  text-align: left;
+  margin-right: 25%;
+  color: blue;
+  border: solid lightblue;
+  background: lightblue;
+}
+
+#log-LUI-suggestion {
+  text-align: left;
+  margin-right: 25%;
+  color: blue;
+}
+
+#log-user {
+  text-align: right;
+  margin-left: 25%;
+  color: orange;
+  border: solid lightyellow;
+  background: lightyellow;
+}
+
+#log-time-stamp {
+  font-size: 30%;
+}
+
+#programming-area {
+  padding: 5px;
+  width: 50%;
+  background: black;
+  color: lime;
+  visibility: collapse;
+  white-space: pre-wrap; /* to preserve spaces and newlines */
+}
+
+body {
+  background: lightblue; /* For browsers that do not support gradients */
+  background: -webkit-linear-gradient(right, lightblue, white); /* For Safari 5.1 to 6.0 */
+  background: -o-linear-gradient(right, lightblue, white); /* For Opera 11.1 to 12.0 */
+  background: -moz-linear-gradient(right, lightblue, white); /* For Firefox 3.6 to 15 */
+  background: linear-gradient(to right, lightblue, white); /* Standard syntax */
+}
+
+input {
+  text-align: center;
+}
+
+#fillertext {
+  font-size:xx-large;
+  text-align:center;
+  color: goldenrod;
+}
+
+#textShape {
+  background: grey;
+  border-radius: 5px;
+  margin: 10px;
+  display: none; /* hide without taking up space */
+}
+
+#textLine {
+  fill: none;
+  stroke: black;
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+svg {
+  background: lightblue;
+  border-radius: 100px;
+}
+
+polyline {
+  fill: none;
+  stroke: whitesmoke;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#gofullpage {
+  background: yellow;
+  padding-bottom: 0;
+  margin-bottom: 0;
 }
