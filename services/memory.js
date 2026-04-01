@@ -1,18 +1,30 @@
-const conversations = new Map();
+import fs from "fs";
 
-export function getMemory(sessionId) {
-  if (!conversations.has(sessionId)) {
-    conversations.set(sessionId, []);
-  }
-  return conversations.get(sessionId);
+const DB_FILE = "./memory.json";
+
+function loadDB() {
+  if (!fs.existsSync(DB_FILE)) return {};
+  return JSON.parse(fs.readFileSync(DB_FILE));
 }
 
-export function addToMemory(sessionId, role, content) {
-  const memory = getMemory(sessionId);
-  memory.push({ role, content });
+function saveDB(db) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
 
-  // Limit memory size (prevents overload)
-  if (memory.length > 20) {
-    memory.shift();
-  }
+export async function getMemory(userId) {
+  const db = loadDB();
+  return db[userId] || [];
+}
+
+export async function saveMemory(userId, message) {
+  const db = loadDB();
+
+  if (!db[userId]) db[userId] = [];
+
+  db[userId].push(message);
+
+  // Optional: limit memory size
+  db[userId] = db[userId].slice(-20);
+
+  saveDB(db);
 }

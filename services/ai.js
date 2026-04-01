@@ -4,12 +4,18 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-export async function getAIResponse(messages) {
-  const response = await client.chat.completions.create({
-    model: "gpt-4o-mini", // fast + capable
-    messages,
-    temperature: 0.4 // lower = more precise, higher = more creative
-  });
+async function getAIResponse(messages) {
+  try {
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages,
+    });
 
-  return response.choices[0].message.content;
+    const reply = response.choices[0].message.content;
+    return reply;
+
+  } catch (error) {
+    console.error("AI Error:", error);
+    throw error;
+  }
 }
