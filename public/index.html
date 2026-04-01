@@ -1,64 +1,187 @@
-<!-- More info: https://github.com/hchiam/language-user-interface -->
-
+<!DOCTYPE html>
+<html>
 <head>
-  <title>LUI</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="style.css">
+<script src="script.js" defer></script>
+<meta charset="utf-8">
+<title>J.A.R.V.I.S</title>
 
-  <!--   material design -->
-  <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<style>
+body {
+  margin: 0;
+  font-family: Helvetica, sans-serif;
+  background: linear-gradient(to right, #011C2D, #033e5a);
+  color: white;
+  text-align: center;
+}
 
-  <!-- bootstrap: -->
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-  <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
-<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script> -->
+/* CENTERING */
+.vertical-center {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
 
-  <!-- jquery -->
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+/* JARVIS HUD */
+svg.jarvis {
+  margin-bottom: 20px;
+}
 
-  <!-- so it can talk back: -->
-  <script src='https://code.responsivevoice.org/responsivevoice.js'></script>
+/* INPUT */
+input {
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  text-align: center;
+  width: 250px;
+}
 
-  <!-- local files: -->
-  <link rel='stylesheet' href='style.css' />
-  <script type="text/javascript" src="brain.js" ></script>
+/* MESSAGE LOG */
+#messageLog {
+  margin-top: 20px;
+  max-width: 500px;
+  white-space: pre-wrap;
+}
+
+/* USER + AI */
+.user {
+  text-align: right;
+  color: orange;
+}
+
+.ai {
+  text-align: left;
+  color: cyan;
+}
+
+/* WAVE */
+.wave svg {
+  background: transparent;
+  margin-top: 20px;
+}
+</style>
 </head>
 
-<body onload="welcome()">
+<body>
 
-  <center>
-    <p id="gofullpage">Full page view: <a href="https://codepen.io/hchiam/full/WOLOJG" target="_blank">here</a></p>
-    <p id='use-chrome'></p>
-    <p id='use-laptop'></p>
-    <p id='fillertext'></p>
-    <p><b>More info: </b>
-      <a href='https://github.com/hchiam/language-user-interface' target="_blank">github.com/hchiam/language-user-interface</a></p>
-    <p><b>Web speech API reference: </b><a href='https://codepen.io/hchiam/pen/gGamzv' target="_blank">codepen.io/hchiam/pen/gGamzv</a></p>
-    <p>This is an old project that <a href="https://github.com/hchiam/language-user-interface/blob/master/brain.js" target="_blank" rel="noopener noreferrer">does not use an LLM</a>.</p>
-  </center>
+<div class="vertical-center">
 
-  <div class="vertical-center">
-    <div id='inputArea' class="container-fluid my-well w3-card" style="text-align:center;">
-      <svg width="50" height="50" 
-           onclick='clicked();'
-           class='w3-card 
-                  w3-hover-shadow'>
-        <polyline id='line'/>
-        <polyline id='line2'/> 
-        <polyline id='line3'/>
-      </svg>
-      <div style="text-align:center;">
-        <progress id='countDownWaiting' value="0" max="100"></progress>
-      </div>
-      <input autofocus id='input' type='text' oninput="converse()" onkeydown="userWantsAnswerNow(event);" size='30' placeholder="Start by typing/saying 'computer'" class='w3-card w3-hover-shadow w3-hover-grey w3-ripple' title="For example: 'computer what time is it'."/>
-    </div>
-    <span id='programming-area' contenteditable="true" oninput="userEditedCode()" class="w3-card w3-hover-shadow"></span>
-    <p id='messageLog' class="container-fluid my-well w3-card"></p>
-    <a class="vertical-center" href="https://goo.gl/forms/Nwf8TXvOW2vE2OHA3" target="_blank">Feedback?</a>
+  <!-- JARVIS TITLE -->
+  <h2>J.A.R.V.I.S</h2>
+
+  <!-- JARVIS HUD -->
+  <svg class="jarvis" width="210" height="210">
+    <circle cx="105" cy="105" r="100" stroke="#B4F6FB" stroke-width="2" fill="none" stroke-dasharray="50,5"/>
+    <circle cx="105" cy="105" r="95" stroke="#64E6EF" stroke-width="1.5" fill="none"/>
+
+    <circle cx="105" cy="105" r="80" stroke="#B4F6FB" stroke-width="10" fill="none" stroke-dasharray="2,2.29">
+      <animateTransform attributeName="transform" type="rotate"
+        from="0 105 105" to="360 105 105"
+        dur="10s" repeatCount="indefinite"/>
+    </circle>
+
+    <circle cx="105" cy="105" r="61" stroke="#B4F6FB" stroke-width="2" fill="none" stroke-dasharray="50,25">
+      <animateTransform attributeName="transform" type="rotate"
+        from="0 105 105" to="-360 105 105"
+        dur="10s" repeatCount="indefinite"/>
+    </circle>
+
+    <circle cx="105" cy="105" r="50" stroke="#64E6EF" stroke-width="15" fill="none"/>
+    <circle cx="105" cy="105" r="40" stroke="#64E6EF" stroke-width="2" fill="none"/>
+
+    <path d="M105 120 L130 95 L80 95 Z"
+      fill="#D1FBFC" stroke="#B4F6FB" stroke-width="5"/>
+  </svg>
+
+  <!-- INPUT -->
+  <input id="input" placeholder="Say something..." onkeydown="handleKey(event)">
+
+  <!-- WAVE -->
+  <div class="wave">
+    <svg width="200" height="50">
+      <polyline id="line"/>
+      <polyline id="line2"/>
+      <polyline id="line3"/>
+    </svg>
   </div>
 
-  <p id='player'></p>
+  <!-- LOG -->
+  <div id="messageLog"></div>
 
-  <script src='https://rawgit.com/hchiam/webApp_MachineLearning_Gesture/master/detect-gesture-import.js'></script>
+</div>
+
+<script>
+
+/* ========================
+   MESSAGE SYSTEM
+======================== */
+function logMessage(text, type) {
+  const div = document.createElement("div");
+  div.className = type;
+  div.textContent = text;
+  document.getElementById("messageLog").appendChild(div);
+}
+
+/* ========================
+   INPUT HANDLER
+======================== */
+function handleKey(e) {
+  if (e.key === "Enter") {
+    const input = document.getElementById("input");
+    const text = input.value;
+    input.value = "";
+
+    logMessage("You: " + text, "user");
+
+    respond(text);
+  }
+}
+
+/* ========================
+   BASIC AI RESPONSE
+======================== */
+function respond(text) {
+  let reply = "Processing...";
+
+  if (text.toLowerCase().includes("hello")) {
+    reply = "Hello, sir.";
+  } else if (text.toLowerCase().includes("time")) {
+    reply = new Date().toLocaleTimeString();
+  } else {
+    reply = "I am still learning, sir.";
+  }
+
+  setTimeout(() => {
+    logMessage("JARVIS: " + reply, "ai");
+  }, 500);
+}
+
+/* ========================
+   WAVE ANIMATION
+======================== */
+let shift = 0;
+
+function generateWave(id, amp, freq) {
+  let points = "";
+  for (let x = 0; x <= 200; x += 2) {
+    let y = 25 + amp * Math.sin((x + shift) * freq);
+    points += `${x},${y} `;
+  }
+  document.getElementById(id).setAttribute("points", points);
+}
+
+function animateWave() {
+  shift += 2;
+  generateWave("line", 5, 0.05);
+  generateWave("line2", 8, 0.04);
+  generateWave("line3", 10, 0.08);
+}
+
+setInterval(animateWave, 30);
+
+</script>
 
 </body>
+</html>

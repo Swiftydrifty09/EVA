@@ -172,7 +172,73 @@ window.mobilecheck = function() {
 var isMobile = window.mobilecheck();
 if (isMobile) {
   $('#use-laptop').text('Wait for the beep. For faster voice recognition, use a laptop.');
-  $('#use-laptop').css({color:'lightgrey', background:'darkgreen'});
+  $('#use-laptop').const  = document.getElementById("input");
+const log = document.getElementById("messageLog");
+
+/* ========================
+   INPUT HANDLING
+======================== */
+input.addEventListener("keydown", function(e) {
+  if (e.key === "Enter") {
+    const text = input.value;
+    input.value = "";
+
+    logMessage("You: " + text, "user");
+    respond(text);
+  }
+});
+
+/* ========================
+   LOG SYSTEM
+======================== */
+function logMessage(text, type) {
+  const div = document.createElement("div");
+  div.className = type;
+  div.textContent = text;
+  log.appendChild(div);
+}
+
+/* ========================
+   BASIC AI CORE
+======================== */
+function respond(text) {
+  let reply;
+
+  if (text.toLowerCase().includes("hello")) {
+    reply = "Hello, sir.";
+  } else if (text.toLowerCase().includes("time")) {
+    reply = new Date().toLocaleTimeString();
+  } else {
+    reply = "Awaiting further instruction.";
+  }
+
+  setTimeout(() => {
+    logMessage("JARVIS: " + reply, "ai");
+  }, 400);
+}
+
+/* ========================
+   WAVE ANIMATION
+======================== */
+let shift = 0;
+
+function generateWave(id, amp, freq) {
+  let points = "";
+  for (let x = 0; x <= 200; x += 2) {
+    let y = 25 + amp * Math.sin((x + shift) * freq);
+    points += `${x},${y} `;
+  }
+  document.getElementById(id).setAttribute("points", points);
+}
+
+function animateWave() {
+  shift += 2;
+  generateWave("line", 5, 0.05);
+  generateWave("line2", 8, 0.04);
+  generateWave("line3", 10, 0.08);
+}
+
+setInterval(animateWave, 30);ss({color:'lightgrey', background:'darkgreen'});
 }
 
 // ----------------------
