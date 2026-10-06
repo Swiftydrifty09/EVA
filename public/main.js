@@ -19,10 +19,13 @@ const speechVoiceKey = "jarvis-speech-voice";
 const localDataStorageKey = "jarvis-local-data";
 const profilesStorageKey = "jarvis-profiles";
 const activeProfileStorageKey = "jarvis-active-profile";
-const isGoogleEnglishVoice = (voice) =>
-  /\bgoogle\b/i.test(voice.name) && /^en[-_]/i.test(voice.lang);
-const isVoiceFour = (voice) =>
-  isGoogleEnglishVoice(voice) && /^Google US English 4(?:\b.*)?$/i.test(voice.name);
+const isGoogleUkMaleVoice = (voice) =>
+  /\bgoogle\b/i.test(voice.name) && /\bmale\b/i.test(voice.name) && /^en[-_]gb$/i.test(voice.lang);
+const pickPreferredVoice = (voices) =>
+  voices.find(isGoogleUkMaleVoice) ||
+  voices.find((voice) => /^Google UK English Male/i.test(voice.name)) ||
+  voices.find((voice) => /^en[-_]gb$/i.test(voice.lang)) ||
+  voices[0];
 let recognition;
 let responseTimer;
 let timers = loadTimers();
@@ -728,8 +731,7 @@ async function speak(text) {
 
   if (sequence !== speechSequence) return;
   const voice = voices.find((item) => item.name === localData.voiceName) ||
-    voices.find(isVoiceFour) ||
-    voices.find((item) => item.default) ||
+    pickPreferredVoice(voices) ||
     voices[0];
   if (!voice) {
     speechPending = false;
@@ -787,26 +789,29 @@ function populateSpeechVoices() {
   }
 
   const voices = window.speechSynthesis.getVoices();
+  const preferredVoices = voices.filter((voice) =>
+    /^Google UK English Male$/i.test(voice.name) && /^en[-_]gb$/i.test(voice.lang)
+  );
+  const selectableVoices = preferredVoices.length > 0 ? preferredVoices : voices;
+
   voiceSelect.replaceChildren();
-  if (voices.length === 0) {
+  if (selectableVoices.length === 0) {
     voiceSelect.add(new Option("No browser voices available", ""));
     voiceSelect.disabled = true;
     toolStatus.textContent = "No speech voices are available in this browser.";
     return;
   }
   voiceSelect.disabled = false;
-  voices.forEach((voice) => {
+  selectableVoices.forEach((voice) => {
     voiceSelect.add(new Option(`${voice.name} (${voice.lang})`, voice.name));
   });
-  if (!voices.some((voice) => voice.name === localData.voiceName)) {
-    const defaultVoice = voices.find(isVoiceFour) ||
-      voices.find((voice) => voice.default) ||
-      voices[0];
+  if (!selectableVoices.some((voice) => voice.name === localData.voiceName)) {
+    const defaultVoice = pickPreferredVoice(selectableVoices) || selectableVoices[0];
     localData.voiceName = defaultVoice.name;
     saveLocalData();
   }
   voiceSelect.value = localData.voiceName;
-  const selected = voices.find((voice) => voice.name === localData.voiceName);
+  const selected = selectableVoices.find((voice) => voice.name === localData.voiceName);
   if (selected) toolStatus.textContent = `Spoken voice for ${localData.profile.name || "this profile"}: ${selected.name}.`;
 }
 
@@ -1122,10 +1127,37 @@ function createGoogleMapsLocationFallbackUrl() {
 }
 
 function createMapCard() {
-  const card = addToolCard(
-    "MAP · GOOGLE MAPS",
-    "Search for a place or choose your approximate location. Both actions open Google Maps. Location is requested only when you choose to share it."
-  );
+  const existing = document.querySelector(".map-overlay .map-panel");
+  if (existing) {
+    const controls = {
+      form: existing.querySelector(".map-search-form"),
+      input: existing.querySelector(".map-search-form input"),
+      searchButton: existing.querySelector(".map-search-form button[type='submit']"),
+      locationButton: existing.querySelector(".map-search-form button[type='button']"),
+      status: existing.querySelector(".map-status"),
+      frame: existing.querySelector(".map-frame-container"),
+      expandButton: existing.querySelector(".map-expand-button")
+    };
+    controls.input?.focus();
+    return controls;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "map-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", "Tactical map");
+
+  const card = document.createElement("section");
+  card.className = "info-panel map-panel";
+  card.tabIndex = 0;
+  card.dataset.mapCard = "true";
+  card.addEventListener("click", (event) => event.stopPropagation());
+
+  const panelLabel = document.createElement("div");
+  panelLabel.className = "panel-label";
+  panelLabel.innerHTML = '<span>MAP SIGHTLINES</span><span class="panel-index">04</span>';
+
   const form = document.createElement("form");
   form.className = "map-search-form";
 
@@ -1150,10 +1182,32 @@ function createMapCard() {
   const frame = document.createElement("div");
   frame.className = "map-frame-container";
 
+  const expandButton = document.createElement("button");
+  expandButton.type = "button";
+  expandButton.className = "map-expand-button";
+  expandButton.textContent = "Close map";
+  expandButton.setAttribute("aria-label", "Close map");
+
+  const closeMap = () => {
+    document.removeEventListener("keydown", onKeyDown);
+    overlay.remove();
+    document.getElementById("map-button")?.focus();
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") closeMap();
+  };
+  expandButton.addEventListener("click", closeMap);
+  overlay.addEventListener("click", closeMap);
+  document.addEventListener("keydown", onKeyDown);
+
   form.append(input, searchButton, locationButton);
-  card.append(form, status, frame);
-  input.focus();
-  return { form, input, searchButton, locationButton, status, frame };
+  card.append(panelLabel, form, status, frame, expandButton);
+  overlay.append(card);
+  document.body.append(overlay);
+  requestAnimationFrame(() => {
+    input.focus();
+  });
+  return { form, input, searchButton, locationButton, status, frame, expandButton };
 }
 
 async function searchMapPlace(controls) {
@@ -1163,7 +1217,10 @@ async function searchMapPlace(controls) {
     return;
   }
   const mapsTab = window.open("about:blank", "_blank");
-  if (mapsTab) mapsTab.opener = null;
+  if (mapsTab) {
+    mapsTab.opener = null;
+    mapsTab.blur();
+  }
   controls.searchButton.disabled = true;
   controls.locationButton.disabled = true;
   controls.frame.replaceChildren();
@@ -1186,9 +1243,12 @@ async function searchMapPlace(controls) {
 
     const name = typeof data.name === "string" && data.name.trim() ? data.name : query;
     renderMap(controls.frame, latitude, longitude, name, controls.status);
-    controls.status.textContent = `Showing ${name}. Opening Google Maps in a new tab; use the link below if it was blocked.`;
+    controls.status.textContent = `Showing ${name}. Google Maps is opening in the background, and the HUD map remains active.`;
     if (mapsTab && !mapsTab.closed) {
       mapsTab.location.replace(createGoogleMapsLocationUrl(latitude, longitude));
+      setTimeout(() => {
+        if (!mapsTab.closed) mapsTab.blur();
+      }, 150);
     }
   } catch (error) {
     if (mapsTab && !mapsTab.closed) mapsTab.close();
@@ -1208,7 +1268,10 @@ async function showMap() {
   });
   controls.locationButton.addEventListener("click", () => {
     const mapsTab = window.open(createGoogleMapsLocationFallbackUrl(), "_blank");
-    if (mapsTab) mapsTab.opener = null;
+    if (mapsTab) {
+      mapsTab.opener = null;
+      mapsTab.blur();
+    }
     runTool(async () => {
       controls.locationButton.disabled = true;
       controls.status.textContent = "Google Maps is opening while JARVIS checks your approximate location…";
@@ -1217,9 +1280,12 @@ async function showMap() {
         const latitude = Number(position.coords.latitude.toFixed(2));
         const longitude = Number(position.coords.longitude.toFixed(2));
         renderMap(controls.frame, latitude, longitude, "your approximate location", controls.status);
-        controls.status.textContent = "Your approximate location is ready. Coordinates are rounded to about 1 km.";
+        controls.status.textContent = "Your approximate location is ready. Coordinates are rounded to about 1 km. The map tab is opening in the background.";
         if (mapsTab && !mapsTab.closed) {
           mapsTab.location.replace(createGoogleMapsLocationUrl(latitude, longitude));
+          setTimeout(() => {
+            if (!mapsTab.closed) mapsTab.blur();
+          }, 150);
         }
       } catch (error) {
         const reason = error.code === 1
