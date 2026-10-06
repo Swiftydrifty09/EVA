@@ -321,7 +321,7 @@ function getReply(message) {
   if (/\b(date|day|today)\b/.test(normalized)) return `Today is ${new Date().toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`;
   if (/\b(joke|make me laugh)\b/.test(normalized)) return "I told my computer I needed a break. It said: 'No problem, I'll go to sleep.'";
   if (/\b(who are you|your name)\b/.test(normalized)) return "I am JARVIS, your local assistant. I can handle a few useful commands without connecting to an AI service.";
-  if (/\b(help|commands|what can you do)\b/.test(normalized)) return "Try: 'What time is it?', 'Convert 5 miles to km', 'Set a timer for 5 minutes', 'Remember that I prefer concise answers', 'What do you remember?', 'Create a task: review the release', 'List tasks', or 'Save a note: launch checklist'. Say 'repeat that' to hear the last reply again; in full-screen voice mode, say 'stop listening' to exit.";
+  if (/\b(help|commands|what can you do)\b/.test(normalized)) return "Try: 'What time is it?', 'What time is it in Tokyo?', 'What time is it in America/Argentina/Buenos_Aires?', 'Convert 5 miles to km', 'Set a timer for 5 minutes', 'Remember that I prefer concise answers', 'What do you remember?', 'Create a task: review the release', 'List tasks', or 'Save a note: launch checklist'. Say 'repeat that' to hear the last reply again; in full-screen voice mode, say 'stop listening' to exit.";
   if (/\b(clear|clear chat|clear conversation)\b/.test(normalized)) {
     clearConversation();
     return "Conversation cleared.";
@@ -414,7 +414,59 @@ function getOpenTarget(message) {
 function getLocalClockReply(message) {
   const normalized = message.trim().toLowerCase();
   const timeRequest = /^(?:(?:what(?:'s| is)? )?(?:the )?time(?: is it)?|tell me (?:the )?time|current time|local time|clock)(?: please)?[?.!]*$/;
+  const placeTimeRequest = /^(?:(?:what(?:'s| is)? )?(?:the )?time(?: is it)?|tell me (?:the )?time|current time|local time|clock)\s+(?:in|at|for)\s+(.+?)[?.!]*$/;
+  const timeZoneAliases = {
+    "new york": "America/New_York", "nyc": "America/New_York",
+    "washington dc": "America/New_York", "toronto": "America/Toronto",
+    "chicago": "America/Chicago", "dallas": "America/Chicago", "mexico city": "America/Mexico_City",
+    "denver": "America/Denver", "phoenix": "America/Phoenix",
+    "los angeles": "America/Los_Angeles", "la": "America/Los_Angeles",
+    "san francisco": "America/Los_Angeles", "seattle": "America/Los_Angeles",
+    "anchorage": "America/Anchorage", "honolulu": "Pacific/Honolulu",
+    "vancouver": "America/Vancouver", "sao paulo": "America/Sao_Paulo",
+    "rio de janeiro": "America/Sao_Paulo", "buenos aires": "America/Argentina/Buenos_Aires",
+    "london": "Europe/London", "dublin": "Europe/Dublin", "lisbon": "Europe/Lisbon",
+    "paris": "Europe/Paris", "madrid": "Europe/Madrid", "barcelona": "Europe/Madrid",
+    "rome": "Europe/Rome", "berlin": "Europe/Berlin", "amsterdam": "Europe/Amsterdam",
+    "brussels": "Europe/Brussels", "zurich": "Europe/Zurich", "geneva": "Europe/Zurich",
+    "vienna": "Europe/Vienna", "prague": "Europe/Prague", "warsaw": "Europe/Warsaw",
+    "athens": "Europe/Athens", "helsinki": "Europe/Helsinki", "stockholm": "Europe/Stockholm",
+    "oslo": "Europe/Oslo", "copenhagen": "Europe/Copenhagen", "istanbul": "Europe/Istanbul",
+    "moscow": "Europe/Moscow", "cairo": "Africa/Cairo", "johannesburg": "Africa/Johannesburg",
+    "lagos": "Africa/Lagos", "nairobi": "Africa/Nairobi", "dubai": "Asia/Dubai",
+    "jerusalem": "Asia/Jerusalem", "delhi": "Asia/Kolkata", "mumbai": "Asia/Kolkata",
+    "kolkata": "Asia/Kolkata", "bangkok": "Asia/Bangkok", "jakarta": "Asia/Jakarta",
+    "singapore": "Asia/Singapore", "hong kong": "Asia/Hong_Kong", "shanghai": "Asia/Shanghai",
+    "beijing": "Asia/Shanghai", "china": "Asia/Shanghai", "taipei": "Asia/Taipei",
+    "seoul": "Asia/Seoul", "south korea": "Asia/Seoul", "japan": "Asia/Tokyo",
+    "india": "Asia/Kolkata", "uae": "Asia/Dubai", "united arab emirates": "Asia/Dubai",
+    "tokyo": "Asia/Tokyo", "osaka": "Asia/Tokyo", "sydney": "Australia/Sydney",
+    "melbourne": "Australia/Melbourne", "brisbane": "Australia/Brisbane",
+    "perth": "Australia/Perth", "auckland": "Pacific/Auckland", "wellington": "Pacific/Auckland"
+  };
   const dateRequest = /^(?:(?:what(?:'s| is) )?(?:the )?date(?: is it)?|tell me (?:the )?date|today(?:'s)? date|what day is it)(?: please)?[?.!]*$/;
+
+  const placeTime = normalized.match(placeTimeRequest);
+  if (placeTime) {
+    const place = placeTime[1].trim().replace(/\s+/g, " ");
+    const zone = timeZoneAliases[place] || place.replace(/\s/g, "_");
+    try {
+      const formatter = new Intl.DateTimeFormat([], {
+        timeZone: zone,
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        timeZoneName: "long"
+      });
+      return `The time in ${place} is ${formatter.format(new Date())}.`;
+    } catch {
+      return `I couldn’t identify “${place}” as a city I recognize or an IANA time zone. Try a major city such as Tokyo or New York, or a zone like America/Argentina/Buenos_Aires.`;
+    }
+  }
 
   if (timeRequest.test(normalized)) {
     return `The local time is ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}.`;

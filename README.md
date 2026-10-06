@@ -24,7 +24,7 @@ The app sends recent chat context to Ollama on your machine. It does not need an
 ## Features
 - Web chat interface
 - Browser voice input and speech output (browser/device support required)
-- Local command parser (greeting, time, date, joke, calculation, unit conversion, open sites, web search)
+- Local command parser (greeting, local or worldwide time by city/time zone, date, joke, calculation, unit conversion, open sites, web search)
 - Local Ollama or OpenAI backend via `/api/chat`
 - Chat history in localStorage
 - Approximate-location weather from the public Open-Meteo service (requires location permission and internet)
@@ -48,3 +48,4 @@ The app sends recent chat context to Ollama on your machine. It does not need an
 - Browser permission prompts govern microphone, location, and screen capture. Hardware, email, calendar, and OS-level automation are not connected.
 - Browser timers cannot run after the app is fully closed; desktop notifications are best effort and browser-dependent. Completed timers are detected when the page next runs.
 - Try “remember that I prefer concise answers”, “what do you remember?”, “create a task: review the release”, “list tasks”, “complete task 1”, “save a note: launch checklist”, and “read my last note”. Add profiles in Agent Tools, select a different voice for each, and switch profiles there or say “my name is …” to update the active profile name. Profile data is specific to this browser and can be cleared through its site-storage settings.
+- Ask “What time is it in Tokyo?” or use an IANA time zone such as “What time is it in America/Argentina/Buenos_Aires?”. World-clock answers use the browser’s built-in time-zone data and do not require an API key.

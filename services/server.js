@@ -112,7 +112,7 @@ function generateLocalReply(message) {
   }
 
   if (/\b(help|commands|what can you do)\b/.test(normalized)) {
-    return "Try: 'What time is it?', 'Convert 5 miles to km', 'What is 24 * (3 + 2)?', 'Tell me a joke', 'Search for space news', or 'Open YouTube'. In the browser, you can also remember facts, manage local tasks and notes, and use 'repeat that' for voice playback.";
+    return "Try: 'What time is it?', 'What time is it in Tokyo?', 'Convert 5 miles to km', 'What is 24 * (3 + 2)?', 'Tell me a joke', 'Search for space news', or 'Open YouTube'. In the browser, you can also remember facts, manage local tasks and notes, and use 'repeat that' for voice playback.";
   }
 
   if (/\b(clear|clear chat|clear conversation)\b/.test(normalized)) {
