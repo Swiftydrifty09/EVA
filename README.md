@@ -44,6 +44,11 @@ The app sends recent chat context to Ollama on your machine. It does not need an
 - Local stopwatch controls in Agent Tools, plus voice/text commands to start, stop, and reset it
 - Custom exact-phrase command aliases stored in this browser (for example, map “launch briefing” to “Brief me”)
 - Local diagnostics for browser speech support, connection state, host CPU/GPU readings, session uptime, command count, and browser storage usage
+- Local random number generation (`random number between 1 and 100`) and an expanded local help command
+- Locally saved HUD themes (deep blue, arctic cyan, violet, and amber)
+- Assistant response styles (balanced, concise, friendly, and formal) are sent as a fixed allowlisted preference with chat requests; local commands remain on-device
+- Optional microphone-reactive core visualizer; microphone access is requested only when enabled, audio is analyzed in-browser, and capture stops when disabled or voice mode exits
+- Network status indicator distinguishes offline local tools from features that need internet access
 - Keyboard shortcuts: `Ctrl+K` focuses chat, `Escape` closes the assistant menu, and `Ctrl+Shift+V` activates full-screen voice mode
 - Browser speech includes voice preview and copy-last-reply clipboard action
 - Optional desktop notifications for timers, enabled only after an explicit user click
@@ -55,5 +60,6 @@ The app sends recent chat context to Ollama on your machine. It does not need an
 - The Node server serves the browser app from `public/`.
 - Browser permission prompts govern microphone, location, and screen capture. The system monitor reads CPU counters from the host running the Node server; GPU utilization requires NVIDIA `nvidia-smi` or AMD `rocm-smi`. Hardware control, email, calendar, and OS-level automation are not connected.
 - Browser timers cannot run after the app is fully closed; desktop notifications are best effort and browser-dependent. Completed timers are detected when the page next runs.
+- The microphone visualizer needs browser microphone permission and Web Audio support. Browser speech recognition availability and offline behavior vary by browser; weather, news, maps, and web search require internet access.
 - Try “brief me”, “what did I save about the trip?”, “remind me tomorrow to call Sam”, “remember that I prefer concise answers”, “what do you remember?”, “create a task: review the release”, “list tasks”, “complete task 1”, “save a note: launch checklist”, and “read my last note”. Briefings, saved-data searches, and date-based reminders use local browser data only and make no API requests. The briefing does not infer priorities beyond highlighting due dates. Add profiles in Agent Tools, select a different voice for each, and switch profiles there or say “my name is …” to update the active profile name. Profile data is specific to this browser and can be cleared through its site-storage settings.
 - Ask “What time is it in Tokyo?” or use an IANA time zone such as “What time is it in America/Argentina/Buenos_Aires?”. World-clock answers use the browser’s built-in time-zone data and do not require an API key.

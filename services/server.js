@@ -252,8 +252,14 @@ function generateLocalReply(message) {
 }
 
 const systemPrompt = "You are JARVIS, a concise, capable personal assistant. Keep answers direct and helpful.";
+const personalityInstructions = {
+  balanced: "Use a balanced, clear, helpful tone.",
+  concise: "Be especially concise and lead with the answer.",
+  friendly: "Use a warm, friendly, approachable tone while staying useful.",
+  formal: "Use a polished, professional tone."
+};
 
-function getConversationMessages(history, message) {
+function getConversationMessages(history, message, personality = "balanced") {
   const messages = Array.isArray(history)
     ? history
         .filter((item) => item && ["user", "assistant"].includes(item.role) && typeof item.content === "string")
@@ -267,7 +273,8 @@ function getConversationMessages(history, message) {
     messages.push({ role: "user", content: message });
   }
 
-  return [{ role: "system", content: systemPrompt }, ...messages];
+  const styleInstruction = personalityInstructions[personality] || personalityInstructions.balanced;
+  return [{ role: "system", content: `${systemPrompt} ${styleInstruction}` }, ...messages];
 }
 
 async function askOpenAI(messages) {
@@ -472,7 +479,10 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "Message is required." });
   }
 
-  const messages = getConversationMessages(req.body?.history, message);
+  const personality = ["balanced", "concise", "friendly", "formal"].includes(req.body?.personality)
+    ? req.body.personality
+    : "balanced";
+  const messages = getConversationMessages(req.body?.history, message, personality);
   const provider = process.env.AI_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "local");
 
   try {

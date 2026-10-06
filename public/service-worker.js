@@ -1,4 +1,4 @@
-const CACHE_NAME = "jarvis-app-shell-v7";
+const CACHE_NAME = "jarvis-app-shell-v8";
 const APP_SHELL = ["/", "/style.css", "/main.js", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {

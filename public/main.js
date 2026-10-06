@@ -18,6 +18,7 @@ const cpuDevice = document.getElementById("cpu-device");
 const cpuBar = document.getElementById("cpu-bar");
 const gpuMetrics = document.getElementById("gpu-metrics");
 const resourceUpdated = document.getElementById("resource-updated");
+const networkStatus = document.getElementById("network-status");
 const speechSupported = "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
 const timerStorageKey = "jarvis-timers";
 const speechVoiceKey = "jarvis-speech-voice";
@@ -58,13 +59,23 @@ let activeProfileId = profileState.activeProfileId;
 let localData = profiles.find((profile) => profile.id === activeProfileId);
 
 function loadLocalPreferences() {
-  const defaults = { speechRate: 1.1, speechPitch: 1, speechMuted: false };
+  const defaults = {
+    speechRate: 1.1,
+    speechPitch: 1,
+    speechMuted: false,
+    theme: "blue",
+    personality: "balanced"
+  };
   try {
     const saved = JSON.parse(localStorage.getItem(localPreferencesKey) || "null");
     return {
       speechRate: Number.isFinite(saved?.speechRate) ? Math.min(1.6, Math.max(0.7, saved.speechRate)) : defaults.speechRate,
       speechPitch: Number.isFinite(saved?.speechPitch) ? Math.min(1.5, Math.max(0.5, saved.speechPitch)) : defaults.speechPitch,
-      speechMuted: typeof saved?.speechMuted === "boolean" ? saved.speechMuted : defaults.speechMuted
+      speechMuted: typeof saved?.speechMuted === "boolean" ? saved.speechMuted : defaults.speechMuted,
+      theme: ["blue", "arctic", "violet", "amber"].includes(saved?.theme) ? saved.theme : defaults.theme,
+      personality: ["balanced", "concise", "friendly", "formal"].includes(saved?.personality)
+        ? saved.personality
+        : defaults.personality
     };
   } catch {
     return defaults;
@@ -78,6 +89,86 @@ function saveLocalPreferences() {
   } catch (error) {
     toolStatus.textContent = `Voice settings could not be saved: ${error.message}`;
     return false;
+  }
+}
+
+function applyAppearancePreferences() {
+  appShell.dataset.theme = localPreferences.theme;
+  document.getElementById("theme-select").value = localPreferences.theme;
+  document.getElementById("personality-select").value = localPreferences.personality;
+}
+
+function updateNetworkStatus() {
+  const online = navigator.onLine;
+  networkStatus.textContent = online ? "NETWORK ONLINE" : "OFFLINE · LOCAL TOOLS";
+  networkStatus.title = online
+    ? "The browser reports a network connection. Online tools still require internet access."
+    : "Offline. Local tools remain available.";
+  networkStatus.classList.toggle("is-offline", !online);
+}
+
+let microphoneStream;
+let microphoneContext;
+let microphoneFrame;
+let microphoneRequestId = 0;
+
+function stopMicrophoneReactivity() {
+  microphoneRequestId += 1;
+  if (microphoneFrame) cancelAnimationFrame(microphoneFrame);
+  microphoneFrame = 0;
+  microphoneStream?.getTracks().forEach((track) => track.stop());
+  microphoneStream = null;
+  if (microphoneContext && microphoneContext.state !== "closed") {
+    microphoneContext.close().catch((error) => {
+      toolStatus.textContent = `Microphone visualizer cleanup failed: ${error.message}`;
+    });
+  }
+  microphoneContext = null;
+  coreVisual.classList.remove("is-mic-reactive");
+  coreVisual.style.removeProperty("--voice-brightness");
+  coreVisual.style.removeProperty("--voice-glow");
+}
+
+async function startMicrophoneReactivity() {
+  const AudioContextType = window.AudioContext || window.webkitAudioContext;
+  if (!navigator.mediaDevices?.getUserMedia || !AudioContextType) {
+    document.getElementById("mic-reactive-toggle").checked = false;
+    toolStatus.textContent = "Microphone-reactive visuals need microphone access and Web Audio support in this browser.";
+    return;
+  }
+  stopMicrophoneReactivity();
+  const requestId = microphoneRequestId;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (requestId !== microphoneRequestId) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    microphoneStream = stream;
+    microphoneContext = new AudioContextType();
+    const source = microphoneContext.createMediaStreamSource(microphoneStream);
+    const analyser = microphoneContext.createAnalyser();
+    analyser.fftSize = 512;
+    const samples = new Float32Array(analyser.fftSize);
+    source.connect(analyser);
+    coreVisual.classList.add("is-mic-reactive");
+    toolStatus.textContent = "Microphone visualizer active. Audio is analyzed in this tab and is not recorded or sent.";
+
+    const updateLevel = () => {
+      if (!microphoneStream || !microphoneContext) return;
+      analyser.getFloatTimeDomainData(samples);
+      const rms = Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
+      const level = Math.min(1, rms * 8);
+      coreVisual.style.setProperty("--voice-brightness", (1 + level * 0.8).toFixed(2));
+      coreVisual.style.setProperty("--voice-glow", level.toFixed(2));
+      microphoneFrame = requestAnimationFrame(updateLevel);
+    };
+    updateLevel();
+  } catch (error) {
+    if (requestId !== microphoneRequestId) return;
+    stopMicrophoneReactivity();
+    document.getElementById("mic-reactive-toggle").checked = false;
+    toolStatus.textContent = `Microphone visualizer unavailable: ${error.message}`;
   }
 }
 
@@ -723,6 +814,34 @@ function convertMeasurement(message) {
 function runLocalCommand(message) {
   const text = message.trim().replace(/[?.!]+$/, "");
   const normalized = text.toLocaleLowerCase();
+
+  if (/^(?:help|commands|what can you do|show commands)$/.test(normalized)) {
+    return "I can help locally with time and date, calculations, unit conversions, random numbers, timers, stopwatch, saved memories, tasks, notes, and system diagnostics. Weather, headlines, maps, and web searches need an internet connection.";
+  }
+
+  if (/^(?:give me |pick )?(?:a )?random(?: number)?(?: between| from) /i.test(text) ||
+      /^(?:give me )?a? ?random number$/i.test(text)) {
+    const range = text.match(/(?:between|from)\s+(-?\d+)\s+(?:and|to)\s+(-?\d+)$/i);
+    const minimum = range ? Number(range[1]) : 1;
+    const maximum = range ? Number(range[2]) : 100;
+    if (!Number.isSafeInteger(minimum) || !Number.isSafeInteger(maximum) || maximum < minimum) {
+      return "Give me a valid whole-number range, such as “random number between 1 and 100.”";
+    }
+    const span = maximum - minimum + 1;
+    if (!Number.isSafeInteger(span) || span < 1 || span > 1_000_000_000) {
+      return "Please choose a random-number range with at most one billion possible values.";
+    }
+    const cryptoSource = window.crypto;
+    if (!cryptoSource?.getRandomValues) {
+      return "Secure random number generation is unavailable in this browser.";
+    }
+    const sample = new Uint32Array(1);
+    const limit = Math.floor(0x1_0000_0000 / span) * span;
+    do {
+      cryptoSource.getRandomValues(sample);
+    } while (sample[0] >= limit);
+    return `Your random number is ${minimum + sample[0] % span}.`;
+  }
 
   const conversion = convertMeasurement(text);
   if (conversion) return conversion;
@@ -1762,6 +1881,8 @@ function enterVoiceOnlyMode() {
 function exitVoiceOnlyMode() {
   voiceOnlyMode = false;
   voiceModeInputFailed = false;
+  stopMicrophoneReactivity();
+  document.getElementById("mic-reactive-toggle").checked = false;
   clearTimeout(voiceRestartTimer);
   appShell.classList.remove("is-voice-only");
   if (recognition && isListening) recognition.stop();
@@ -2061,7 +2182,11 @@ async function sendMessage(message) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: commandText, history: getConversationHistory() })
+      body: JSON.stringify({
+        message: commandText,
+        history: getConversationHistory(),
+        personality: localPreferences.personality
+      })
     });
 
     const data = await response.json();
@@ -2325,6 +2450,25 @@ document.getElementById("alias-add").addEventListener("click", () => {
 document.getElementById("diagnostics-button").addEventListener("click", () => {
   sendMessage("Run diagnostics");
 });
+document.getElementById("theme-select").addEventListener("change", (event) => {
+  localPreferences.theme = event.currentTarget.value;
+  applyAppearancePreferences();
+  if (saveLocalPreferences()) toolStatus.textContent = `Saved ${event.currentTarget.selectedOptions[0].textContent} theme in this browser.`;
+});
+document.getElementById("personality-select").addEventListener("change", (event) => {
+  localPreferences.personality = event.currentTarget.value;
+  if (saveLocalPreferences()) {
+    toolStatus.textContent = `Saved ${event.currentTarget.selectedOptions[0].textContent} assistant response style in this browser.`;
+  }
+});
+document.getElementById("mic-reactive-toggle").addEventListener("change", (event) => {
+  if (event.currentTarget.checked) {
+    startMicrophoneReactivity();
+  } else {
+    stopMicrophoneReactivity();
+    toolStatus.textContent = "Microphone-reactive visuals are off. The microphone is no longer in use by the visualizer.";
+  }
+});
 document.getElementById("voice-test-button").addEventListener("click", () => {
   if (localPreferences.speechMuted) {
     toolStatus.textContent = "Speech output is muted. Unmute speech to preview the selected voice.";
@@ -2364,6 +2508,10 @@ document.addEventListener("keydown", (event) => {
   }
 });
 updateSpeechSettings();
+applyAppearancePreferences();
+updateNetworkStatus();
+window.addEventListener("online", updateNetworkStatus);
+window.addEventListener("offline", updateNetworkStatus);
 renderStopwatch();
 renderCommandAliases();
 updateLocalDiagnostics();

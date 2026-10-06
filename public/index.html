@@ -19,9 +19,11 @@
         </a>
         <div class="topbar-status">
           <span class="status-light"></span>
-          <span>LOCAL MODE</span>
+          <span>LOCAL APP</span>
           <span class="status-divider"></span>
           <span id="top-clock">--:--:--</span>
+          <span class="status-divider"></span>
+          <span id="network-status" role="status">CHECKING NETWORK</span>
         </div>
         <button class="voice-mode-exit" id="voice-mode-exit" type="button">EXIT VOICE MODE</button>
       </header>
@@ -62,7 +64,7 @@
           </form>
 
           <p class="privacy-note"><span class="status-light"></span> Local-first tools. External feeds and permissions are opt-in.</p>
-          <p class="privacy-note"><span class="status-light"></span> Local-first tools. External feeds and permissions are opt-in.</p>
+          <p class="shortcut-note"><kbd>Ctrl</kbd> + <kbd>K</kbd> focus chat <span>·</span> <kbd>Esc</kbd> close menu <span>·</span> <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> voice mode</p>
         </section>
 
         <aside class="side-rail" aria-label="Assistant status and commands">
@@ -97,9 +99,12 @@
 
           <section class="info-panel command-panel">
             <div class="panel-label"><span>QUICK COMMANDS</span><span class="panel-index">03</span></div>
+            <p class="command-guide-note">Local: time, calculate, convert, timers, stopwatch, tasks, notes, memory, random number, diagnostics.</p>
             <button class="command-button" type="button" data-command="What time is it?">What time is it?<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Brief me">Brief me<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Tell me a joke">Tell me a joke<span>&#8599;</span></button>
+            <button class="command-button" type="button" data-command="Random number between 1 and 100">Random number<span>&#8599;</span></button>
+            <button class="command-button" type="button" data-command="Run diagnostics">Run diagnostics<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Help">Show commands<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="List my tasks">List my tasks<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="What do you remember?">What do you remember?<span>&#8599;</span></button>
@@ -137,6 +142,31 @@
               <button class="voice-test-button" id="speech-mute-button" type="button" aria-pressed="false">Mute speech</button>
               <button class="voice-test-button" id="voice-test-button" type="button">Preview voice</button>
             </div>
+            <section class="appearance-settings" aria-label="Local appearance and assistant style">
+              <div class="panel-label"><span>APPEARANCE &amp; STYLE</span><span class="panel-index">LOCAL</span></div>
+              <label for="theme-select">HUD THEME</label>
+              <select id="theme-select">
+                <option value="blue">Deep blue</option>
+                <option value="arctic">Arctic cyan</option>
+                <option value="violet">Violet</option>
+                <option value="amber">Amber</option>
+              </select>
+              <label for="personality-select">ASSISTANT STYLE</label>
+              <select id="personality-select">
+                <option value="balanced">Balanced</option>
+                <option value="concise">Concise</option>
+                <option value="friendly">Friendly</option>
+                <option value="formal">Formal</option>
+              </select>
+              <p>Response style affects Ollama or OpenAI chat. On-device commands stay in this browser.</p>
+            </section>
+            <section class="microphone-settings" aria-label="Microphone visual effects">
+              <label>
+                <input id="mic-reactive-toggle" type="checkbox" />
+                <span>Microphone-reactive core</span>
+              </label>
+              <p>Optional microphone access powers an on-device volume visualizer. Audio is not recorded or sent.</p>
+            </section>
             <section class="local-stopwatch" aria-label="Local stopwatch">
               <div class="panel-label"><span>STOPWATCH</span><span class="panel-index">LOCAL</span></div>
               <output id="stopwatch-display" aria-live="off">00:00.0</output>
