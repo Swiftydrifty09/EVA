@@ -40,7 +40,12 @@ The app sends recent chat context to Ollama on your machine. It does not need an
 - On-device daily briefing (`brief me`, `what should I focus on today`) summarizes local time, overdue and upcoming tasks, active timers, and saved-memory counts without making API requests
 - On-device search across saved profile facts, notes, and tasks (for example, `what did I save about the trip?`) plus date-based task reminders (for example, `remind me tomorrow to call Sam`); searches and reminders stay in local browser storage and make no API requests
 - Voice shortcuts include “repeat that” and “stop listening” in full-screen voice mode
-- Browser speech can use any voice installed in the browser, with a separately saved voice selection for each local profile; includes voice preview and copy-last-reply clipboard action
+- Browser speech can use any voice installed in the browser, with a separately saved voice selection for each local profile; speech speed, pitch, and mute controls are stored locally
+- Local stopwatch controls in Agent Tools, plus voice/text commands to start, stop, and reset it
+- Custom exact-phrase command aliases stored in this browser (for example, map “launch briefing” to “Brief me”)
+- Local diagnostics for browser speech support, connection state, host CPU/GPU readings, session uptime, command count, and browser storage usage
+- Keyboard shortcuts: `Ctrl+K` focuses chat, `Escape` closes the assistant menu, and `Ctrl+Shift+V` activates full-screen voice mode
+- Browser speech includes voice preview and copy-last-reply clipboard action
 - Optional desktop notifications for timers, enabled only after an explicit user click
 - Cancel timers with `cancel timers`; timers are saved locally and restored on the next visit
 

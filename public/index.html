@@ -62,9 +62,16 @@
           </form>
 
           <p class="privacy-note"><span class="status-light"></span> Local-first tools. External feeds and permissions are opt-in.</p>
+          <p class="privacy-note"><span class="status-light"></span> Local-first tools. External feeds and permissions are opt-in.</p>
         </section>
 
         <aside class="side-rail" aria-label="Assistant status and commands">
+          <details class="rail-menu">
+            <summary class="rail-menu-toggle">
+              <span>ASSISTANT MENU</span>
+              <span class="rail-menu-indicator" aria-hidden="true"></span>
+            </summary>
+            <div class="rail-menu-content">
           <section class="info-panel">
             <div class="panel-label"><span>LOCAL TIME</span><span class="panel-index">01</span></div>
             <p class="time-display" id="clock">--:--</p>
@@ -123,14 +130,47 @@
               <select id="voice-select" aria-label="Choose spoken voice">
                 <option value="">Loading available voices…</option>
               </select>
+              <label for="speech-rate">SPEECH SPEED <output id="speech-rate-value" for="speech-rate">1.1×</output></label>
+              <input id="speech-rate" type="range" min="0.7" max="1.6" step="0.1" value="1.1" />
+              <label for="speech-pitch">VOICE PITCH <output id="speech-pitch-value" for="speech-pitch">1.0</output></label>
+              <input id="speech-pitch" type="range" min="0.5" max="1.5" step="0.1" value="1" />
+              <button class="voice-test-button" id="speech-mute-button" type="button" aria-pressed="false">Mute speech</button>
               <button class="voice-test-button" id="voice-test-button" type="button">Preview voice</button>
             </div>
+            <section class="local-stopwatch" aria-label="Local stopwatch">
+              <div class="panel-label"><span>STOPWATCH</span><span class="panel-index">LOCAL</span></div>
+              <output id="stopwatch-display" aria-live="off">00:00.0</output>
+              <div class="stopwatch-controls">
+                <button class="voice-test-button" id="stopwatch-toggle" type="button">Start</button>
+                <button class="voice-test-button" id="stopwatch-reset" type="button">Reset</button>
+              </div>
+            </section>
+            <section class="local-aliases" aria-label="Local command aliases">
+              <div class="panel-label"><span>COMMAND ALIASES</span><span class="panel-index">LOCAL</span></div>
+              <label for="alias-name">PHRASE</label>
+              <input id="alias-name" type="text" maxlength="60" placeholder="e.g. launch briefing" />
+              <label for="alias-command">RUN COMMAND</label>
+              <input id="alias-command" type="text" maxlength="120" placeholder="e.g. Brief me" />
+              <button class="voice-test-button" id="alias-add" type="button">Add alias</button>
+              <div id="alias-list" aria-live="polite"></div>
+            </section>
+            <section class="local-diagnostics" aria-label="Local diagnostics">
+              <div class="panel-label"><span>LOCAL DIAGNOSTICS</span><span class="panel-index">LIVE</span></div>
+              <div class="diagnostic-stats">
+                <span>SESSION <strong id="session-uptime">00:00</strong></span>
+                <span>COMMANDS <strong id="command-count">0</strong></span>
+                <span>STORAGE <strong id="storage-usage">Checking…</strong></span>
+              </div>
+              <button class="voice-test-button" id="diagnostics-button" type="button">Run diagnostics</button>
+            </section>
             <button class="command-button" id="notification-button" type="button">Enable timer alerts<span>&#8599;</span></button>
             <div class="timer-list" id="timer-list" aria-live="polite"></div>
             <p class="tool-note" id="tool-status" aria-live="polite">Files and screen stay in this browser. Timers need this tab open; weather shares an approximate location.</p>
           </section>
 
           <div class="rail-footer"><span class="status-light"></span><span id="voice-status">VOICE INPUT CHECKING</span></div>
+            </div>
+          </details>
         </aside>
       </main>
     </div>

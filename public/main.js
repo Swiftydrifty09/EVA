@@ -24,6 +24,15 @@ const speechVoiceKey = "jarvis-speech-voice";
 const localDataStorageKey = "jarvis-local-data";
 const profilesStorageKey = "jarvis-profiles";
 const activeProfileStorageKey = "jarvis-active-profile";
+const localPreferencesKey = "jarvis-local-preferences";
+const commandAliasesKey = "jarvis-command-aliases";
+const sessionStartedAt = Date.now();
+let sessionCommandCount = 0;
+let stopwatchStartedAt = 0;
+let stopwatchElapsed = 0;
+let stopwatchInterval;
+let localPreferences = loadLocalPreferences();
+let commandAliases = loadCommandAliases();
 const isGoogleUkMaleVoice = (voice) =>
   /\bgoogle\b/i.test(voice.name) && /\bmale\b/i.test(voice.name) && /^en[-_]gb$/i.test(voice.lang);
 const pickPreferredVoice = (voices) =>
@@ -47,6 +56,52 @@ const profileState = loadProfiles();
 let profiles = profileState.profiles;
 let activeProfileId = profileState.activeProfileId;
 let localData = profiles.find((profile) => profile.id === activeProfileId);
+
+function loadLocalPreferences() {
+  const defaults = { speechRate: 1.1, speechPitch: 1, speechMuted: false };
+  try {
+    const saved = JSON.parse(localStorage.getItem(localPreferencesKey) || "null");
+    return {
+      speechRate: Number.isFinite(saved?.speechRate) ? Math.min(1.6, Math.max(0.7, saved.speechRate)) : defaults.speechRate,
+      speechPitch: Number.isFinite(saved?.speechPitch) ? Math.min(1.5, Math.max(0.5, saved.speechPitch)) : defaults.speechPitch,
+      speechMuted: typeof saved?.speechMuted === "boolean" ? saved.speechMuted : defaults.speechMuted
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function saveLocalPreferences() {
+  try {
+    localStorage.setItem(localPreferencesKey, JSON.stringify(localPreferences));
+    return true;
+  } catch (error) {
+    toolStatus.textContent = `Voice settings could not be saved: ${error.message}`;
+    return false;
+  }
+}
+
+function loadCommandAliases() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(commandAliasesKey) || "[]");
+    if (!Array.isArray(saved)) return [];
+    return saved.filter((alias) =>
+      alias && typeof alias.phrase === "string" && typeof alias.command === "string"
+    ).slice(0, 30);
+  } catch {
+    return [];
+  }
+}
+
+function saveCommandAliases() {
+  try {
+    localStorage.setItem(commandAliasesKey, JSON.stringify(commandAliases));
+    return true;
+  } catch (error) {
+    toolStatus.textContent = `Command aliases could not be saved: ${error.message}`;
+    return false;
+  }
+}
 
 function normalizeProfile(stored, fallbackId) {
   if (!stored || typeof stored !== "object") return null;
@@ -838,6 +893,7 @@ function runLocalCommand(message) {
 }
 
 async function speak(text) {
+  if (localPreferences.speechMuted) return;
   if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
     toolStatus.textContent = "Speech output is not supported by this browser.";
     return;
@@ -886,7 +942,8 @@ async function speak(text) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.voice = voice;
   utterance.lang = voice.lang;
-  utterance.rate = 1.12;
+  utterance.rate = localPreferences.speechRate;
+  utterance.pitch = localPreferences.speechPitch;
   utterance.onstart = () => {
     if (sequence !== speechSequence) return;
     isSpeaking = true;
@@ -1768,20 +1825,139 @@ function getConversationHistory() {
   }));
 }
 
+function formatStopwatch(milliseconds) {
+  const tenths = Math.floor(milliseconds / 100);
+  const seconds = Math.floor(tenths / 10);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const remainderSeconds = seconds % 60;
+  const remainderTenths = tenths % 10;
+  if (hours) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(remainderSeconds).padStart(2, "0")}.${remainderTenths}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(remainderSeconds).padStart(2, "0")}.${remainderTenths}`;
+}
+
+function getStopwatchElapsed() {
+  return stopwatchElapsed + (stopwatchStartedAt ? Date.now() - stopwatchStartedAt : 0);
+}
+
+function renderStopwatch() {
+  document.getElementById("stopwatch-display").textContent = formatStopwatch(getStopwatchElapsed());
+  document.getElementById("stopwatch-toggle").textContent = stopwatchStartedAt ? "Stop" : "Start";
+}
+
+function toggleStopwatch() {
+  if (stopwatchStartedAt) {
+    stopwatchElapsed += Date.now() - stopwatchStartedAt;
+    stopwatchStartedAt = 0;
+    clearInterval(stopwatchInterval);
+  } else {
+    stopwatchStartedAt = Date.now();
+    stopwatchInterval = setInterval(renderStopwatch, 100);
+  }
+  renderStopwatch();
+}
+
+function resetStopwatch() {
+  stopwatchStartedAt = 0;
+  stopwatchElapsed = 0;
+  clearInterval(stopwatchInterval);
+  renderStopwatch();
+}
+
+function getStorageUsage() {
+  try {
+    let bytes = 0;
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key !== null) bytes += (key.length + localStorage.getItem(key).length) * 2;
+    }
+    return bytes < 1024 * 1024
+      ? `${(bytes / 1024).toFixed(1)} KB`
+      : `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  } catch {
+    return "Unavailable";
+  }
+}
+
+function formatDuration(milliseconds) {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor(totalSeconds % 3600 / 60);
+  const seconds = totalSeconds % 60;
+  return hours
+    ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function updateLocalDiagnostics() {
+  document.getElementById("session-uptime").textContent = formatDuration(Date.now() - sessionStartedAt);
+  document.getElementById("command-count").textContent = String(sessionCommandCount);
+  document.getElementById("storage-usage").textContent = getStorageUsage();
+}
+
+function getDiagnosticsReport() {
+  const speechOutput = "speechSynthesis" in window ? "available" : "unavailable";
+  const speechInput = speechSupported ? "available" : "unsupported in this browser";
+  const connection = navigator.onLine ? "online" : "offline";
+  const cpu = cpuUsage.textContent;
+  const gpuCount = gpuMetrics.querySelectorAll(".resource-metric").length;
+  const gpu = gpuCount ? `${gpuCount} device${gpuCount === 1 ? "" : "s"} reporting` : "not detected";
+  return `Local diagnostics: connection ${connection}; speech input ${speechInput}; speech output ${speechOutput}; CPU ${cpu}; GPU ${gpu}; browser storage ${getStorageUsage()}; ${sessionCommandCount} command${sessionCommandCount === 1 ? "" : "s"} this session; uptime ${formatDuration(Date.now() - sessionStartedAt)}.`;
+}
+
+function renderCommandAliases() {
+  const list = document.getElementById("alias-list");
+  list.replaceChildren();
+  commandAliases.forEach((alias, index) => {
+    const row = document.createElement("div");
+    row.className = "alias-row";
+    const label = document.createElement("span");
+    label.textContent = `${alias.phrase} → ${alias.command}`;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "alias-remove";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `Remove alias ${alias.phrase}`);
+    remove.addEventListener("click", () => {
+      const previousAliases = commandAliases.slice();
+      commandAliases.splice(index, 1);
+      if (saveCommandAliases()) {
+        renderCommandAliases();
+      } else {
+        commandAliases = previousAliases;
+      }
+    });
+    row.append(label, remove);
+    list.appendChild(row);
+  });
+}
+
+function getAliasedCommand(text) {
+  const normalized = text.trim().replace(/[?.!]+$/, "").toLocaleLowerCase();
+  return commandAliases.find((alias) =>
+    alias.phrase.toLocaleLowerCase() === normalized
+  )?.command || text;
+}
+
 async function sendMessage(message) {
   const text = message.trim();
   if (!text) return;
 
+  sessionCommandCount += 1;
+  updateLocalDiagnostics();
   addMessage(text, "user");
   input.value = "";
   setActive(true);
 
-  const isOpenCommand = /^open\b/i.test(text);
-  const target = getOpenTarget(text);
+  const commandText = getAliasedCommand(text);
+  const isOpenCommand = /^open\b/i.test(commandText);
+  const target = getOpenTarget(commandText);
   if (isOpenCommand && target) {
     window.open(target, "_blank", "noopener,noreferrer");
     const destination = target.includes("/search?")
-      ? `a web search for ${text.replace(/^open\s+(?:the\s+)?/i, "").replace(/[?.!]+$/, "")}`
+      ? `a web search for ${commandText.replace(/^open\s+(?:the\s+)?/i, "").replace(/[?.!]+$/, "")}`
       : new URL(target).hostname.replace(/^www\./, "");
     const reply = `Opening ${destination} in a new tab.`;
     addMessage(reply, "assistant");
@@ -1793,7 +1969,7 @@ async function sendMessage(message) {
     window.open(target, "_blank", "noopener,noreferrer");
   }
 
-  const localClockReply = getLocalClockReply(text);
+  const localClockReply = getLocalClockReply(commandText);
   if (localClockReply) {
     addMessage(localClockReply, "assistant");
     speak(localClockReply);
@@ -1801,7 +1977,38 @@ async function sendMessage(message) {
     return;
   }
 
-  const normalized = text.toLowerCase();
+  const normalized = commandText.toLowerCase();
+  if (/^(?:start|begin|run) (?:the )?stopwatch$/.test(normalized)) {
+    if (!stopwatchStartedAt) toggleStopwatch();
+    const reply = "Stopwatch started.";
+    addMessage(reply, "assistant");
+    speak(reply);
+    setActive(false);
+    return;
+  }
+  if (/^(?:stop|pause) (?:the )?stopwatch$/.test(normalized)) {
+    if (stopwatchStartedAt) toggleStopwatch();
+    const reply = `Stopwatch stopped at ${formatStopwatch(getStopwatchElapsed())}.`;
+    addMessage(reply, "assistant");
+    speak(reply);
+    setActive(false);
+    return;
+  }
+  if (/^(?:reset|clear) (?:the )?stopwatch$/.test(normalized)) {
+    resetStopwatch();
+    const reply = "Stopwatch reset.";
+    addMessage(reply, "assistant");
+    speak(reply);
+    setActive(false);
+    return;
+  }
+  if (/^(?:show )?(?:system )?status$|^(?:run )?diagnostics$/.test(normalized)) {
+    const reply = getDiagnosticsReport();
+    addMessage(reply, "assistant");
+    speak(reply);
+    setActive(false);
+    return;
+  }
   if (/\b(weather|temperature|forecast)\b/.test(normalized)) {
     await showWeather();
     setActive(false);
@@ -1822,7 +2029,7 @@ async function sendMessage(message) {
     setActive(false);
     return;
   }
-  const timerRequest = parseTimerRequest(text);
+  const timerRequest = parseTimerRequest(commandText);
   if (timerRequest) {
     if (timerRequest.cancelAll) {
       const cancelledCount = timers.length;
@@ -1842,7 +2049,7 @@ async function sendMessage(message) {
     return;
   }
 
-  const localReply = runLocalCommand(text);
+  const localReply = runLocalCommand(commandText);
   if (localReply) {
     addMessage(localReply, "assistant");
     speak(localReply);
@@ -1854,7 +2061,7 @@ async function sendMessage(message) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, history: getConversationHistory() })
+      body: JSON.stringify({ message: commandText, history: getConversationHistory() })
     });
 
     const data = await response.json();
@@ -2044,7 +2251,85 @@ voiceSelect.addEventListener("change", () => {
   const saved = saveLocalData();
   toolStatus.textContent = `Using ${voice.name} (${voice.lang}) for ${localData.profile.name || "this profile"}${saved ? "." : " for this session; browser storage is unavailable."}`;
 });
+const speechRate = document.getElementById("speech-rate");
+const speechPitch = document.getElementById("speech-pitch");
+const speechMuteButton = document.getElementById("speech-mute-button");
+const updateSpeechSettings = () => {
+  speechRate.value = String(localPreferences.speechRate);
+  speechPitch.value = String(localPreferences.speechPitch);
+  document.getElementById("speech-rate-value").textContent = `${localPreferences.speechRate.toFixed(1)}×`;
+  document.getElementById("speech-pitch-value").textContent = localPreferences.speechPitch.toFixed(1);
+  speechMuteButton.textContent = localPreferences.speechMuted ? "Unmute speech" : "Mute speech";
+  speechMuteButton.setAttribute("aria-pressed", String(localPreferences.speechMuted));
+};
+speechRate.addEventListener("input", () => {
+  localPreferences.speechRate = Number(speechRate.value);
+  updateSpeechSettings();
+  saveLocalPreferences();
+});
+speechPitch.addEventListener("input", () => {
+  localPreferences.speechPitch = Number(speechPitch.value);
+  updateSpeechSettings();
+  saveLocalPreferences();
+});
+speechMuteButton.addEventListener("click", () => {
+  localPreferences.speechMuted = !localPreferences.speechMuted;
+  if (localPreferences.speechMuted && "speechSynthesis" in window) {
+    ++speechSequence;
+    window.speechSynthesis.cancel();
+    speechPending = false;
+    isSpeaking = false;
+    renderAssistantState();
+  }
+  updateSpeechSettings();
+  saveLocalPreferences();
+  scheduleVoiceListening();
+  toolStatus.textContent = localPreferences.speechMuted
+    ? "Speech output muted. Voice input and text replies still work."
+    : "Speech output unmuted.";
+});
+document.getElementById("stopwatch-toggle").addEventListener("click", toggleStopwatch);
+document.getElementById("stopwatch-reset").addEventListener("click", resetStopwatch);
+document.getElementById("alias-add").addEventListener("click", () => {
+  const phraseInput = document.getElementById("alias-name");
+  const commandInput = document.getElementById("alias-command");
+  const phrase = phraseInput.value.trim().replace(/[?.!]+$/, "");
+  const command = commandInput.value.trim();
+  if (!phrase || !command) {
+    toolStatus.textContent = "Enter both an alias phrase and the command it should run.";
+    return;
+  }
+  const previousAliases = commandAliases.slice();
+  if (phrase.length > 60 || command.length > 120) {
+    toolStatus.textContent = "Alias phrases must be 60 characters or less and commands 120 characters or less.";
+    return;
+  }
+  const existingIndex = commandAliases.findIndex((alias) =>
+    alias.phrase.toLocaleLowerCase() === phrase.toLocaleLowerCase()
+  );
+  if (existingIndex >= 0) commandAliases.splice(existingIndex, 1);
+  if (commandAliases.length >= 30) {
+    toolStatus.textContent = "You can save up to 30 command aliases.";
+    return;
+  }
+  commandAliases.push({ phrase, command });
+  if (!saveCommandAliases()) {
+    commandAliases = previousAliases;
+    return;
+  }
+  renderCommandAliases();
+  phraseInput.value = "";
+  commandInput.value = "";
+  toolStatus.textContent = `Saved “${phrase}” as an alias for “${command}”.`;
+});
+document.getElementById("diagnostics-button").addEventListener("click", () => {
+  sendMessage("Run diagnostics");
+});
 document.getElementById("voice-test-button").addEventListener("click", () => {
+  if (localPreferences.speechMuted) {
+    toolStatus.textContent = "Speech output is muted. Unmute speech to preview the selected voice.";
+    return;
+  }
   if (!("speechSynthesis" in window)) {
     toolStatus.textContent = "Speech synthesis is not supported in this browser.";
     return;
@@ -2058,6 +2343,31 @@ document.getElementById("voice-test-button").addEventListener("click", () => {
   toolStatus.textContent = `Previewing ${voice.name} (${voice.lang}) for ${localData.profile.name || "this profile"}.`;
   speak("Good day. Systems are online. How may I assist you?");
 });
+document.addEventListener("keydown", (event) => {
+  const editing = event.target instanceof HTMLElement &&
+    (event.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName));
+  if (event.key === "Escape") {
+    const menu = document.querySelector(".rail-menu");
+    if (menu.open) {
+      menu.open = false;
+      document.querySelector(".rail-menu-toggle").focus();
+    }
+    return;
+  }
+  if (editing || !event.ctrlKey || event.altKey || event.metaKey) return;
+  if (event.key.toLocaleLowerCase() === "k" && !event.shiftKey) {
+    event.preventDefault();
+    input.focus();
+  } else if (event.key.toLocaleLowerCase() === "v" && event.shiftKey) {
+    event.preventDefault();
+    voiceModeEnter.click();
+  }
+});
+updateSpeechSettings();
+renderStopwatch();
+renderCommandAliases();
+updateLocalDiagnostics();
+setInterval(updateLocalDiagnostics, 1000);
 voiceModeEnter.addEventListener("click", enterVoiceOnlyMode);
 voiceModeExit.addEventListener("click", exitVoiceOnlyMode);
 document.addEventListener("fullscreenchange", () => {
