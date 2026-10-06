@@ -13,6 +13,11 @@ const toolStatus = document.getElementById("tool-status");
 const fileInput = document.getElementById("file-input");
 const voiceSelect = document.getElementById("voice-select");
 const timerList = document.getElementById("timer-list");
+const cpuUsage = document.getElementById("cpu-usage");
+const cpuDevice = document.getElementById("cpu-device");
+const cpuBar = document.getElementById("cpu-bar");
+const gpuMetrics = document.getElementById("gpu-metrics");
+const resourceUpdated = document.getElementById("resource-updated");
 const speechSupported = "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
 const timerStorageKey = "jarvis-timers";
 const speechVoiceKey = "jarvis-speech-voice";
@@ -37,6 +42,7 @@ let voiceOnlyMode = false;
 let speechPending = false;
 let voiceRestartTimer;
 let voiceModeInputFailed = false;
+let isUpdatingSystemMetrics = false;
 const profileState = loadProfiles();
 let profiles = profileState.profiles;
 let activeProfileId = profileState.activeProfileId;
@@ -1033,8 +1039,9 @@ async function showWeather() {
   }
 }
 
-function renderMap(frame, latitude, longitude, label, status) {
-  const zoom = 15;
+function renderMap(frame, latitude, longitude, label, status, zoom = 12) {
+  const minZoom = 3;
+  const maxZoom = 18;
   const tileCount = 2 ** zoom;
   const normalizedLatitude = Math.max(-85.0511, Math.min(85.0511, latitude));
   const latitudeRadians = normalizedLatitude * Math.PI / 180;
@@ -1073,6 +1080,30 @@ function renderMap(frame, latitude, longitude, label, status) {
   marker.setAttribute("aria-hidden", "true");
   viewport.append(tileGrid, marker);
 
+  const zoomControls = document.createElement("div");
+  zoomControls.className = "map-zoom-controls";
+  zoomControls.setAttribute("role", "group");
+  zoomControls.setAttribute("aria-label", "Map zoom controls");
+  [
+    { label: "Zoom in", symbol: "+", nextZoom: zoom + 1 },
+    { label: "Zoom out", symbol: "−", nextZoom: zoom - 1 }
+  ].forEach(({ label: controlLabel, symbol, nextZoom }) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "map-zoom-button";
+    button.textContent = symbol;
+    button.setAttribute("aria-label", controlLabel);
+    button.disabled = nextZoom < minZoom || nextZoom > maxZoom;
+    button.addEventListener("click", () => {
+      renderMap(frame, latitude, longitude, label, status, nextZoom);
+      frame.querySelector(`[aria-label="${controlLabel}"]`)?.focus();
+    });
+    zoomControls.appendChild(button);
+  });
+  const canvas = document.createElement("div");
+  canvas.className = "map-canvas";
+  canvas.append(viewport, zoomControls);
+
   const externalLink = document.createElement("a");
   const externalUrl = new URL("https://www.google.com/maps/search/");
   externalUrl.search = new URLSearchParams({
@@ -1088,7 +1119,7 @@ function renderMap(frame, latitude, longitude, label, status) {
   attribution.className = "map-attribution";
   attribution.textContent = "Map tiles © Esri, HERE, Garmin, FAO, NOAA, USGS and other providers.";
 
-  frame.replaceChildren(viewport, attribution, externalLink);
+  frame.replaceChildren(canvas, attribution, externalLink);
 }
 
 function createGoogleMapsLink(query, label) {
@@ -1700,6 +1731,83 @@ function updateClock() {
   document.getElementById("date").textContent = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
+function setResourceBar(bar, usagePercent) {
+  bar.setAttribute("aria-valuenow", String(usagePercent));
+  bar.firstElementChild.style.width = `${usagePercent}%`;
+}
+
+function renderGpuMetrics(gpu) {
+  gpuMetrics.replaceChildren();
+  if (!gpu.available || !gpu.devices.length) {
+    const unavailable = document.createElement("p");
+    unavailable.className = "resource-unavailable";
+    unavailable.textContent = gpu.reason || "GPU utilization is unavailable on this device.";
+    gpuMetrics.appendChild(unavailable);
+    return;
+  }
+
+  gpu.devices.forEach((device, index) => {
+    const metric = document.createElement("div");
+    metric.className = "resource-metric";
+
+    const heading = document.createElement("div");
+    heading.className = "resource-heading";
+    const label = document.createElement("span");
+    label.textContent = `GPU${gpu.devices.length > 1 ? ` ${index + 1}` : ""} `;
+    const name = document.createElement("small");
+    name.textContent = device.name;
+    label.appendChild(name);
+
+    const value = document.createElement("strong");
+    value.textContent = `${device.usagePercent}%`;
+    heading.append(label, value);
+
+    const bar = document.createElement("div");
+    bar.className = "resource-track";
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-label", `${device.name} GPU utilization`);
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", "100");
+    const fill = document.createElement("span");
+    bar.appendChild(fill);
+    setResourceBar(bar, device.usagePercent);
+
+    metric.append(heading, bar);
+    gpuMetrics.appendChild(metric);
+  });
+}
+
+async function updateSystemMetrics() {
+  if (isUpdatingSystemMetrics) return;
+  isUpdatingSystemMetrics = true;
+  try {
+    const response = await fetch("/api/system", { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || `System monitor request failed (HTTP ${response.status}).`);
+    }
+    if (!data.cpu || !data.gpu || !Array.isArray(data.gpu.devices)) {
+      throw new Error("The local system monitor returned invalid device metrics.");
+    }
+
+    cpuDevice.textContent = `${data.cpu.name} · ${data.cpu.coreCount} logical cores`;
+    if (Number.isFinite(data.cpu.usagePercent)) {
+      cpuUsage.textContent = `${data.cpu.usagePercent}%`;
+      setResourceBar(cpuBar, data.cpu.usagePercent);
+    } else {
+      cpuUsage.textContent = "Sampling…";
+      cpuBar.removeAttribute("aria-valuenow");
+      cpuBar.firstElementChild.style.width = "0%";
+    }
+    renderGpuMetrics(data.gpu);
+    resourceUpdated.textContent = `Updated ${new Date(data.sampledAt).toLocaleTimeString()}`;
+  } catch (error) {
+    resourceUpdated.textContent = `System metrics unavailable: ${error.message}`;
+  } finally {
+    isUpdatingSystemMetrics = false;
+  }
+}
+
 composer.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage(input.value);
@@ -1820,6 +1928,8 @@ voiceStatus.textContent = speechSupported ? "VOICE INPUT AVAILABLE" : "VOICE INP
 restoreMessages();
 updateClock();
 setInterval(updateClock, 1000);
+updateSystemMetrics();
+setInterval(updateSystemMetrics, 3000);
 
 window.addEventListener("load", () => {
   if (!("serviceWorker" in navigator)) {

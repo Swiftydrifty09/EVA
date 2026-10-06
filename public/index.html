@@ -71,8 +71,25 @@
             <p class="date-display" id="date">Loading date</p>
           </section>
 
+          <section class="info-panel resource-panel" aria-label="Device resource usage">
+            <div class="panel-label"><span>DEVICE LOAD</span><span class="panel-index">02</span></div>
+            <div class="resource-metric">
+              <div class="resource-heading">
+                <span>CPU <small id="cpu-device">Detecting device</small></span>
+                <strong id="cpu-usage">--</strong>
+              </div>
+              <div class="resource-track" id="cpu-bar" role="progressbar" aria-label="CPU utilization" aria-valuemin="0" aria-valuemax="100">
+                <span></span>
+              </div>
+            </div>
+            <div class="resource-gpus" id="gpu-metrics" aria-live="polite">
+              <p class="resource-unavailable">Checking GPU availability…</p>
+            </div>
+            <p class="resource-updated" id="resource-updated" aria-live="polite">Connecting to local system monitor…</p>
+          </section>
+
           <section class="info-panel command-panel">
-            <div class="panel-label"><span>QUICK COMMANDS</span><span class="panel-index">02</span></div>
+            <div class="panel-label"><span>QUICK COMMANDS</span><span class="panel-index">03</span></div>
             <button class="command-button" type="button" data-command="What time is it?">What time is it?<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Tell me a joke">Tell me a joke<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Help">Show commands<span>&#8599;</span></button>
@@ -81,7 +98,7 @@
           </section>
 
           <section class="info-panel tools-panel" aria-label="Local assistant tools">
-            <div class="panel-label"><span>AGENT TOOLS</span><span class="panel-index">03</span></div>
+            <div class="panel-label"><span>AGENT TOOLS</span><span class="panel-index">04</span></div>
             <div class="local-memory">
               <label for="profile-select">ACTIVE PROFILE</label>
               <select id="profile-select" aria-label="Choose local profile"></select>

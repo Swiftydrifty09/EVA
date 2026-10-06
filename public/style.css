@@ -478,6 +478,18 @@ h1 { color: #effaff; font-size: clamp(29px, 3.3vw, 44px); letter-spacing: -0.035
 }
 
 .message-list { gap: 9px; padding: 18px 0; }
+
+.resource-panel { display: flex; flex-direction: column; gap: 16px; }
+.resource-metric { display: grid; gap: 8px; }
+.resource-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.resource-heading > span { min-width: 0; color: var(--text); font-family: var(--mono); font-size: 10px; }
+.resource-heading small { display: block; overflow: hidden; margin-top: 5px; color: var(--muted); font-family: inherit; font-size: 9px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.resource-heading strong { flex: 0 0 auto; color: var(--mint); font-family: var(--mono); font-size: 12px; }
+.resource-track { height: 5px; overflow: hidden; border-radius: 99px; background: rgba(125, 152, 168, 0.18); }
+.resource-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--mint), var(--lime)); transition: width 300ms ease; }
+.resource-gpus { display: grid; gap: 14px; }
+.resource-unavailable, .resource-updated { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.resource-updated { padding-top: 11px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 9px; overflow-wrap: anywhere; }
 .message { gap: 8px 10px; padding: 10px 13px; }
 .message-meta, .message-time { font-size: 8px; }
 .message-body { font-size: 13px; line-height: 1.55; }
@@ -1329,6 +1341,11 @@ body::after {
   overflow: visible;
   padding-top: 2px;
 }
+.map-canvas {
+  position: relative;
+  width: 100%;
+  max-width: none;
+}
 .map-overlay {
   position: fixed;
   z-index: 1000;
@@ -1388,6 +1405,30 @@ body::after {
     0 0 26px rgba(86, 226, 255, 0.08),
     0 8px 18px rgba(0, 0, 0, 0.18);
 }
+.map-zoom-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  display: grid;
+  gap: 5px;
+}
+.map-zoom-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgba(86, 226, 255, 0.4);
+  background: rgba(10, 23, 34, 0.92);
+  color: #9feeff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+}
+.map-zoom-button:hover:not(:disabled) { background: #123043; }
+.map-zoom-button:focus-visible { outline: 2px solid #9feeff; outline-offset: 2px; }
+.map-zoom-button:disabled { cursor: not-allowed; opacity: 0.45; }
 .map-tile-grid {
   position: absolute;
   top: -100%;

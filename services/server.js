@@ -1,9 +1,13 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
 const express = require("express");
 const dotenv = require("dotenv");
 const OpenAI = require("openai");
 
+const execFileAsync = promisify(execFile);
 const rootDir = path.resolve(__dirname, "..");
 const envPath = path.join(rootDir, ".env");
 if (fs.existsSync(envPath)) {
@@ -12,6 +16,105 @@ if (fs.existsSync(envPath)) {
 
 const app = express();
 app.use(express.json({ limit: "64kb" }));
+
+function readCpuCounters() {
+  const cores = os.cpus();
+  return {
+    name: cores[0]?.model || `${os.arch()} processor`,
+    coreCount: cores.length,
+    idle: cores.reduce((total, core) => total + core.times.idle, 0),
+    total: cores.reduce(
+      (total, core) => total + Object.values(core.times).reduce((sum, time) => sum + time, 0),
+      0
+    )
+  };
+}
+
+let previousCpuCounters = readCpuCounters();
+
+function getCpuUsage() {
+  const current = readCpuCounters();
+  const idleDelta = current.idle - previousCpuCounters.idle;
+  const totalDelta = current.total - previousCpuCounters.total;
+  previousCpuCounters = current;
+
+  return {
+    name: current.name,
+    coreCount: current.coreCount,
+    usagePercent: totalDelta > 0
+      ? Math.round(Math.max(0, Math.min(100, (1 - idleDelta / totalDelta) * 100)))
+      : null
+  };
+}
+
+async function runGpuCommand(command, args) {
+  const { stdout } = await execFileAsync(command, args, {
+    timeout: 2500,
+    windowsHide: true,
+    maxBuffer: 16 * 1024
+  });
+  return stdout.trim();
+}
+
+async function getGpuUsage() {
+  const errors = [];
+  try {
+    const output = await runGpuCommand("nvidia-smi", [
+      "--query-gpu=name,utilization.gpu",
+      "--format=csv,noheader,nounits"
+    ]);
+    const devices = output.split(/\r?\n/).filter(Boolean).map((line) => {
+      const separator = line.lastIndexOf(",");
+      const name = line.slice(0, separator).trim();
+      const usagePercent = Number(line.slice(separator + 1).trim());
+      if (separator < 0 || !name || !Number.isFinite(usagePercent)) {
+        throw new Error("NVIDIA GPU metrics returned an invalid reading.");
+      }
+      return { name, usagePercent: Math.max(0, Math.min(100, usagePercent)) };
+    });
+    if (devices.length) return { available: true, devices };
+    errors.push("nvidia-smi returned no GPU readings.");
+  } catch (error) {
+    errors.push(describeGpuCommandError("nvidia-smi", error));
+  }
+
+  try {
+    const output = await runGpuCommand("rocm-smi", ["--showuse", "--showproductname", "--json"]);
+    const data = JSON.parse(output);
+    const devices = Object.entries(data).flatMap(([deviceName, details]) => {
+      if (!details || typeof details !== "object") return [];
+      const usageEntry = Object.entries(details).find(([key]) =>
+        /gpu\s*(use|utilization)|(?:use|utilization)\s*.*gpu/i.test(key)
+      );
+      if (!usageEntry) return [];
+      const usagePercent = Number.parseFloat(String(usageEntry[1]).replace("%", "").trim());
+      const productName = Object.entries(details).find(([key]) =>
+        /card series|product name|gpu name/i.test(key)
+      )?.[1];
+      if (!Number.isFinite(usagePercent)) return [];
+      return [{
+        name: typeof productName === "string" ? productName : deviceName,
+        usagePercent: Math.max(0, Math.min(100, usagePercent))
+      }];
+    });
+    if (devices.length) return { available: true, devices };
+    errors.push("rocm-smi returned no GPU readings.");
+  } catch (error) {
+    errors.push(describeGpuCommandError("rocm-smi", error));
+  }
+
+  return {
+    available: false,
+    devices: [],
+    reason: `GPU utilization is unavailable. ${errors.join(" ")}`
+  };
+}
+
+function describeGpuCommandError(command, error) {
+  if (error.code === "ENOENT") return `${command} is not installed.`;
+  if (error.code === "ETIMEDOUT") return `${command} timed out.`;
+  return `${command} failed: ${error.message}`;
+}
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(rootDir, "public", "index.html"));
@@ -27,6 +130,13 @@ app.get("/main.js", (req, res) => {
 
 app.use(express.static(path.join(rootDir, "public")));
 app.use(express.static(rootDir));
+
+app.get("/api/system", async (req, res) => {
+  const cpu = getCpuUsage();
+  const gpu = await getGpuUsage();
+  res.set("Cache-Control", "no-store");
+  res.json({ cpu, gpu, sampledAt: new Date().toISOString() });
+});
 
 function parseCalculation(expression) {
   const sanitized = expression.replace(/\s+/g, "");
@@ -392,7 +502,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 function startServer(port, attempts = 0) {
-  const server = app.listen(port, () => {
+  const server = app.listen(port, "0.0.0.0", () => {
     console.log(`JARVIS running on port ${port}`);
   });
 
@@ -416,5 +526,5 @@ function startServer(port, attempts = 0) {
   });
 }
 
-const preferredPort = Number(process.env.PORT) || 3100;
+const preferredPort = Number(process.env.PORT) || 3000;
 startServer(preferredPort);
