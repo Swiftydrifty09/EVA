@@ -1,41 +1,65 @@
-const { getMemory, addToMemory } = require("../../services/memory");
-const { getAIResponse } = require("../../services/ai");
+const fs = require("fs");
+const path = require("path");
 
-router.post("/", async (req, res) => {
+const MEMORY_FILE = path.join(__dirname, "..", ".jarvis-memory.json");
+const DEFAULT_SESSION = "default";
+
+function ensureFile() {
   try {
-    const { message, sessionId } = req.body;
-
-    if (!message) {
-      return res.status(400).json({ error: "Missing message" });
+    if (!fs.existsSync(MEMORY_FILE)) {
+      fs.writeFileSync(MEMORY_FILE, JSON.stringify({}, null, 2));
     }
-
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("Transfer-Encoding", "chunked");
-
-    const memory = getMemory(sessionId);
-
-    const messages = [
-      {
-        role: "system",
-        content: "You are JARVIS. Answer clearly and directly."
-      },
-      ...memory,
-      {
-        role: "user",
-        content: message
-      }
-    ];
-
-    // store user message BEFORE response
-    addToMemory(sessionId, { role: "user", content: message });
-
-    const fullResponse = await getAIResponse(messages, res);
-
-    // store AI response AFTER
-    addToMemory(sessionId, { role: "assistant", content: fullResponse });
-
-  } catch (err) {
-    console.error("ROUTE ERROR:", err);
-    res.status(500).end();
+  } catch (error) {
+    console.warn("Memory store unavailable:", error.message);
   }
-});
+}
+
+function readStore() {
+  ensureFile();
+  try {
+    const raw = fs.readFileSync(MEMORY_FILE, "utf8");
+    const parsed = JSON.parse(raw || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.warn("Unable to read memory store:", error.message);
+    return {};
+  }
+}
+
+function writeStore(store) {
+  try {
+    fs.writeFileSync(MEMORY_FILE, JSON.stringify(store, null, 2));
+  } catch (error) {
+    console.warn("Unable to write memory store:", error.message);
+  }
+}
+
+function getMemory(sessionId = DEFAULT_SESSION) {
+  const store = readStore();
+  const items = Array.isArray(store[sessionId]) ? store[sessionId] : [];
+  return items.slice(-20);
+}
+
+function addToMemory(sessionId = DEFAULT_SESSION, entry) {
+  if (!entry || typeof entry !== "object") return [];
+
+  const store = readStore();
+  const existing = Array.isArray(store[sessionId]) ? store[sessionId] : [];
+  const next = [...existing, { ...entry }].slice(-20);
+  store[sessionId] = next;
+  writeStore(store);
+  return next;
+}
+
+function clearMemory(sessionId = DEFAULT_SESSION) {
+  const store = readStore();
+  delete store[sessionId];
+  writeStore(store);
+  return [];
+}
+
+module.exports = {
+  getMemory,
+  addToMemory,
+  clearMemory
+};

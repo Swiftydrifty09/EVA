@@ -1431,15 +1431,15 @@ body::after {
 .map-zoom-button:disabled { cursor: not-allowed; opacity: 0.45; }
 .map-tile-grid {
   position: absolute;
-  top: -100%;
-  left: -100%;
-  display: grid;
-  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
-  width: 300%;
-  height: 300%;
-  transform: translate(var(--map-shift-x), var(--map-shift-y));
+  inset: 0;
 }
-.map-tile-grid img { display: block; width: 100%; height: 100%; min-width: 0; object-fit: cover; }
+.map-tile-grid img {
+  position: absolute;
+  display: block;
+  width: 256px;
+  height: 256px;
+  max-width: none;
+}
 .map-marker {
   position: absolute;
   top: 50%;
@@ -1625,4 +1625,65 @@ body::after {
   .app-shell.is-voice-only .core-visual { width: min(78vw, 52vh); }
   .app-shell.is-voice-only .waveform { bottom: 10vh; }
   .app-shell.is-voice-only .core-caption { bottom: 5vh; }
+}
+
+body::before {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(5, 105, 132, 0.12), transparent 45%),
+    radial-gradient(ellipse at 8% 92%, rgba(4, 74, 101, 0.12), transparent 36%);
+  content: "";
+  pointer-events: none;
+}
+
+.app-shell { z-index: 1; }
+.brand-name {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.brand small {
+  color: #61949d;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.2em;
+}
+.topbar-status {
+  padding: 9px 12px;
+  border: 1px solid rgba(2, 254, 255, 0.16);
+  background: rgba(2, 18, 25, 0.56);
+  box-shadow: inset 0 0 16px rgba(2, 254, 255, 0.025);
+}
+.core-panel, .info-panel {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.info-panel:hover {
+  border-color: rgba(2, 254, 255, 0.42);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.48), inset 0 0 26px rgba(2, 254, 255, 0.04);
+}
+.command-panel .command-button, .tools-panel .command-button {
+  min-height: 42px;
+}
+.composer input::placeholder { color: #66878d; }
+.text-button, .voice-mode-enter, .voice-mode-exit, .voice-test-button {
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+::selection {
+  background: rgba(2, 254, 255, 0.28);
+  color: #eaffff;
+}
+
+@media (max-width: 600px) {
+  .topbar-status { padding: 7px 9px; }
+  .brand small { font-size: 7px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-panel, .info-panel, .text-button, .voice-mode-enter, .voice-mode-exit, .voice-test-button {
+    transition: none;
+  }
 }

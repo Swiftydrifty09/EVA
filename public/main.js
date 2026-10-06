@@ -259,7 +259,7 @@ function restoreMessages() {
   }
 
   if (chat.childElementCount === 0) {
-    addMessage("Good day. Local systems are ready. Ask for the time, convert units, set a timer, get weather or headlines, or open Agent Tools for file and screen utilities.", "assistant");
+    addMessage("Good day. Local systems are ready. Ask for a local briefing, the time, a unit conversion, or a timer; weather and headlines are available online, and Agent Tools has file and screen utilities.", "assistant");
   }
 }
 
@@ -330,7 +330,7 @@ function getReply(message) {
   if (/\b(date|day|today)\b/.test(normalized)) return `Today is ${new Date().toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`;
   if (/\b(joke|make me laugh)\b/.test(normalized)) return "I told my computer I needed a break. It said: 'No problem, I'll go to sleep.'";
   if (/\b(who are you|your name)\b/.test(normalized)) return "I am JARVIS, your local assistant. I can handle a few useful commands without connecting to an AI service.";
-  if (/\b(help|commands|what can you do)\b/.test(normalized)) return "Try: 'What time is it?', 'What time is it in Tokyo?', 'What time is it in America/Argentina/Buenos_Aires?', 'Convert 5 miles to km', 'Set a timer for 5 minutes', 'Remember that I prefer concise answers', 'What do you remember?', 'Create a task: review the release', 'List tasks', or 'Save a note: launch checklist'. Say 'repeat that' to hear the last reply again; in full-screen voice mode, say 'stop listening' to exit.";
+  if (/\b(help|commands|what can you do)\b/.test(normalized)) return "Try: 'Brief me' for your local tasks and timers, 'What did I save about the trip?' to search local notes and memories, 'Remind me tomorrow to call Sam', 'What time is it?', 'Convert 5 miles to km', 'Set a timer for 5 minutes', 'Remember that I prefer concise answers', 'Create a task: review the release', 'List tasks', or 'Save a note: launch checklist'. Say 'repeat that' to hear the last reply again; in full-screen voice mode, say 'stop listening' to exit.";
   if (/\b(clear|clear chat|clear conversation)\b/.test(normalized)) {
     clearConversation();
     return "Conversation cleared.";
@@ -354,7 +354,7 @@ function getReply(message) {
     return `Opening ${open[1]}.`;
   }
 
-  return "I am running without an AI service, so I cannot answer open-ended questions yet. I can tell the time or date, calculate expressions, tell a joke, and open or search the web. Say 'help' for examples.";
+  return "I am running without an AI service, so I cannot answer open-ended questions yet. I can brief you on your local tasks and timers, search saved notes and memories, set local task reminders, tell the time or date, calculate expressions, manage saved tasks and notes, tell a joke, and open or search the web. Say 'help' for examples.";
 }
 
 function getOpenTarget(message) {
@@ -506,6 +506,119 @@ function addLocalListCard(title, entries, emptyText) {
   card.append(list);
 }
 
+function createLocalBriefing() {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+  const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).getTime();
+  const openTasks = localData.tasks.filter((task) => task.status === "open");
+  const overdueTasks = openTasks
+    .filter((task) => task.dueAt != null && task.dueAt < startOfToday)
+    .sort((a, b) => a.dueAt - b.dueAt);
+  const dueToday = openTasks
+    .filter((task) => task.dueAt != null && task.dueAt >= startOfToday && task.dueAt < endOfToday)
+    .sort((a, b) => a.dueAt - b.dueAt);
+  const dueSoon = openTasks
+    .filter((task) => task.dueAt != null && task.dueAt >= endOfToday && task.dueAt < endOfWeek)
+    .sort((a, b) => a.dueAt - b.dueAt);
+  const undatedTasks = openTasks.filter((task) => task.dueAt == null);
+  const activeTimers = timers
+    .filter((timer) => timer.dueAt > now.getTime())
+    .sort((a, b) => a.dueAt - b.dueAt);
+
+  const taskEntry = (task) => {
+    const due = new Date(task.dueAt).toLocaleDateString([], { month: "short", day: "numeric" });
+    return `${task.title} · due ${due}`;
+  };
+  const entries = [
+    `Local time: ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`,
+    `Open tasks: ${openTasks.length} · overdue: ${overdueTasks.length} · due today: ${dueToday.length}.`
+  ];
+
+  if (overdueTasks.length) {
+    entries.push("Overdue — consider reviewing these first:", ...overdueTasks.slice(0, 5).map(taskEntry));
+  }
+  if (dueToday.length) {
+    entries.push("Due today:", ...dueToday.slice(0, 5).map(taskEntry));
+  }
+  if (dueSoon.length) {
+    entries.push("Due in the next 6 days:", ...dueSoon.slice(0, 5).map(taskEntry));
+  }
+  if (undatedTasks.length) {
+    entries.push("Open tasks with no due date:", ...undatedTasks.slice(0, 5).map((task) => task.title));
+    if (undatedTasks.length > 5) entries.push(`${undatedTasks.length - 5} more undated task${undatedTasks.length === 6 ? "" : "s"}.`);
+  }
+  if (activeTimers.length) {
+    entries.push("Next active timers:", ...activeTimers.slice(0, 3).map((timer) =>
+      `${timer.label} · ${formatDuration(timer.dueAt - now.getTime())} remaining`
+    ));
+  } else {
+    entries.push("No active timers.");
+  }
+  entries.push(`Saved locally: ${localData.facts.length} memor${localData.facts.length === 1 ? "y" : "ies"} and ${localData.notes.length} note${localData.notes.length === 1 ? "" : "s"}.`);
+  addLocalListCard("LOCAL DAILY BRIEFING", entries, "No local briefing data is available.");
+  return overdueTasks.length || dueToday.length
+    ? `Your local briefing: ${overdueTasks.length} overdue and ${dueToday.length} due today. I’ve listed your tasks and active timers.`
+    : `Your local briefing is ready. You have ${openTasks.length} open tasks and ${activeTimers.length} active timers.`;
+}
+
+function searchLocalInformation(query) {
+  const ignoredWords = new Set("about anything find for have i me my of saved search show the what".split(" "));
+  const words = query.toLocaleLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) || [];
+  const terms = [...new Set(words.filter((word) => word.length > 1 && !ignoredWords.has(word)))];
+  if (!terms.length) return "Add a few specific words to search your saved information.";
+
+  const records = [
+    ...localData.facts.map((fact) => ({ type: "MEMORY", title: fact, content: fact })),
+    ...localData.notes.map((note) => ({ type: "NOTE", title: note.title, content: note.content })),
+    ...localData.tasks.map((task) => ({
+      type: task.status === "open" ? "OPEN TASK" : "COMPLETED TASK",
+      title: task.title,
+      content: task.title
+    }))
+  ];
+  const matches = records
+    .map((record) => {
+      const haystack = `${record.title} ${record.content}`.toLocaleLowerCase();
+      const matchedTerms = terms.filter((term) => haystack.includes(term));
+      const exactPhraseBonus = haystack.includes(query.toLocaleLowerCase().trim()) ? terms.length : 0;
+      return { ...record, score: matchedTerms.length + exactPhraseBonus };
+    })
+    .filter((record) => record.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (!matches.length) {
+    return `I couldn’t find saved notes, memories, or tasks matching “${query}”.`;
+  }
+
+  const entries = matches.slice(0, 8).map((record) => {
+    const excerpt = record.content.length > 200 ? `${record.content.slice(0, 197)}…` : record.content;
+    return `${record.type} · ${record.title === excerpt ? record.title : `${record.title}: ${excerpt}`}`;
+  });
+  addLocalListCard("LOCAL SEARCH RESULTS", entries, "No saved information matched.");
+  return `I found ${matches.length} saved item${matches.length === 1 ? "" : "s"} matching “${query}”. The results were searched only in this browser.`;
+}
+
+function saveLocalTask(title, dueAt) {
+  const task = { id: createLocalId(), title, createdAt: Date.now(), dueAt, status: "open" };
+  localData.tasks.push(task);
+  localData.tasks = localData.tasks.slice(-100);
+  const saved = saveLocalData();
+  return `Task added: ${title}${dueAt ? `, due ${new Date(dueAt).toLocaleDateString()}` : ""}.${describeLocalSave(saved)}`;
+}
+
+function parseTaskDueDate(dayText, daysFromNow) {
+  const date = new Date();
+  if (Number.isInteger(daysFromNow)) {
+    if (daysFromNow < 0 || daysFromNow > 365) return null;
+    date.setDate(date.getDate() + daysFromNow);
+  } else if (dayText?.toLocaleLowerCase() === "tomorrow") {
+    date.setDate(date.getDate() + 1);
+  }
+  date.setHours(23, 59, 59, 999);
+  return date.getTime();
+}
+
 function convertMeasurement(message) {
   const match = message.trim().replace(/[?.!]+$/, "").match(
     /^convert\s+(-?\d+(?:\.\d+)?)\s+(?:from\s+)?([a-z]+)\s+to\s+([a-z]+)$/i
@@ -558,6 +671,28 @@ function runLocalCommand(message) {
 
   const conversion = convertMeasurement(text);
   if (conversion) return conversion;
+
+  if (/^(?:brief me|daily briefing|give me (?:a )?briefing|what should i focus on(?: today)?|what(?:'s| is) on my plate|what needs doing today)(?: please)?$/.test(normalized)) {
+    return createLocalBriefing();
+  }
+
+  const reminder = text.match(
+    /^remind me (?:to (.+?) (today|tomorrow)|in (\d{1,3}) days? to (.+)|(today|tomorrow) to (.+))$/i
+  );
+  if (reminder) {
+    const title = (reminder[1] || reminder[4] || reminder[6]).trim().slice(0, 200);
+    const daysFromNow = reminder[3] === undefined ? undefined : Number(reminder[3]);
+    const dueAt = parseTaskDueDate(reminder[2] || reminder[5], daysFromNow);
+    if (dueAt === null) return "Choose a reminder from today up to 365 days from now.";
+    if (!title) return "Tell me what you would like to be reminded about.";
+    const reply = saveLocalTask(title, dueAt);
+    return `${reply} This is a local task reminder, not a timed notification.`;
+  }
+
+  const searchSaved = text.match(
+    /^(?:search (?:my )?(?:notes|memories|saved info) for|find (?:saved )?(?:notes?|memories|info) (?:about|for)|what did i (?:save|write|note) (?:about|regarding)|what do i have saved (?:about|regarding)|do i have anything saved? (?:about|regarding))\s+(.+)$/i
+  );
+  if (searchSaved) return searchLocalInformation(searchSaved[1]);
 
   const setName = text.match(/^(?:my name is|call me)\s+(.+)$/i);
   if (setName) {
@@ -626,11 +761,7 @@ function runLocalCommand(message) {
     }
     title = title.replace(/^["']|["']$/g, "").slice(0, 200);
     if (!title) return "Give the task a short description, for example: “Create a task: review the release”.";
-    const task = { id: createLocalId(), title, createdAt: Date.now(), dueAt, status: "open" };
-    localData.tasks.push(task);
-    localData.tasks = localData.tasks.slice(-100);
-    const saved = saveLocalData();
-    return `Task added: ${title}${dueAt ? `, due ${new Date(dueAt).toLocaleDateString()}` : ""}.${describeLocalSave(saved)}`;
+    return saveLocalTask(title, dueAt);
   }
 
   if (/^(?:(?:list|show) (?:my )?|what(?:'s| is| are) (?:on )?(?:my )?)(?:tasks|to-?dos)$/.test(normalized)) {
@@ -1047,8 +1178,6 @@ function renderMap(frame, latitude, longitude, label, status, zoom = 12) {
   const latitudeRadians = normalizedLatitude * Math.PI / 180;
   const tileX = (longitude + 180) / 360 * tileCount;
   const tileY = (1 - Math.asinh(Math.tan(latitudeRadians)) / Math.PI) / 2 * tileCount;
-  const centerTileX = Math.floor(tileX);
-  const centerTileY = Math.floor(tileY);
   const viewport = document.createElement("div");
   viewport.className = "map-viewport";
   viewport.setAttribute("role", "img");
@@ -1056,24 +1185,6 @@ function renderMap(frame, latitude, longitude, label, status, zoom = 12) {
 
   const tileGrid = document.createElement("div");
   tileGrid.className = "map-tile-grid";
-  tileGrid.style.setProperty("--map-shift-x", `${(1 / 6 - (tileX - centerTileX) / 3) * 100}%`);
-  tileGrid.style.setProperty("--map-shift-y", `${(1 / 6 - (tileY - centerTileY) / 3) * 100}%`);
-  for (let row = -1; row <= 1; row += 1) {
-    for (let column = -1; column <= 1; column += 1) {
-      const x = (centerTileX + column + tileCount) % tileCount;
-      const y = centerTileY + row;
-      const tile = document.createElement("img");
-      tile.alt = "";
-      tile.loading = "eager";
-      tile.addEventListener("error", () => {
-        status.textContent = "Some map tiles could not be loaded. Check your connection; you can still open this place in Google Maps.";
-      }, { once: true });
-      if (y >= 0 && y < tileCount) {
-        tile.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${y}/${x}`;
-      }
-      tileGrid.append(tile);
-    }
-  }
 
   const marker = document.createElement("span");
   marker.className = "map-marker";
@@ -1120,6 +1231,46 @@ function renderMap(frame, latitude, longitude, label, status, zoom = 12) {
   attribution.textContent = "Map tiles © Esri, HERE, Garmin, FAO, NOAA, USGS and other providers.";
 
   frame.replaceChildren(canvas, attribution, externalLink);
+
+  const renderTiles = () => {
+    const tileSize = 256;
+    const viewportWidth = viewport.clientWidth;
+    const viewportHeight = viewport.clientHeight;
+    const firstColumn = Math.floor(tileX - viewportWidth / (2 * tileSize)) - 1;
+    const lastColumn = Math.ceil(tileX + viewportWidth / (2 * tileSize)) + 1;
+    const firstRow = Math.floor(tileY - viewportHeight / (2 * tileSize)) - 1;
+    const lastRow = Math.ceil(tileY + viewportHeight / (2 * tileSize)) + 1;
+    tileGrid.replaceChildren();
+
+    for (let row = firstRow; row <= lastRow; row += 1) {
+      for (let column = firstColumn; column <= lastColumn; column += 1) {
+        const x = (column % tileCount + tileCount) % tileCount;
+        const tile = document.createElement("img");
+        tile.alt = "";
+        tile.loading = "eager";
+        tile.style.left = `${(column - tileX) * tileSize + viewportWidth / 2}px`;
+        tile.style.top = `${(row - tileY) * tileSize + viewportHeight / 2}px`;
+        tile.addEventListener("error", () => {
+          status.textContent = "Some map tiles could not be loaded. Check your connection; you can still open this place in Google Maps.";
+        }, { once: true });
+        if (row >= 0 && row < tileCount) {
+          tile.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${row}/${x}`;
+        }
+        tileGrid.append(tile);
+      }
+    }
+  };
+  renderTiles();
+  if (typeof ResizeObserver === "function") {
+    const resizeObserver = new ResizeObserver(() => {
+      if (!viewport.isConnected) {
+        resizeObserver.disconnect();
+        return;
+      }
+      renderTiles();
+    });
+    resizeObserver.observe(viewport);
+  }
 }
 
 function createGoogleMapsLink(query, label) {

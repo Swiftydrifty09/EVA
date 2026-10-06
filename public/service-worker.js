@@ -1,4 +1,4 @@
-const CACHE_NAME = "jarvis-app-shell-v3";
+const CACHE_NAME = "jarvis-app-shell-v6";
 const APP_SHELL = ["/", "/style.css", "/main.js", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -42,7 +42,20 @@ self.addEventListener("fetch", (event) => {
 
   if (APP_SHELL.includes(url.pathname)) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request))
+      fetch(request).then((response) => {
+        if (response.ok) {
+          event.waitUntil(
+            caches.open(CACHE_NAME)
+              .then((cache) => cache.put(request, response.clone()))
+              .catch((error) => console.error("Could not update the offline app cache:", error))
+          );
+        }
+        return response;
+      }).catch(async (error) => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        throw error;
+      })
     );
   }
 });

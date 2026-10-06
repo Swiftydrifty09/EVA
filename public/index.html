@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#111b18" />
+    <meta name="theme-color" content="#050a12" />
     <title>JARVIS | Local Assistant</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -15,7 +15,7 @@
       <header class="topbar">
         <a class="brand" href="/" aria-label="JARVIS home">
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="brand-name"><strong>JARVIS</strong></span>
+          <span class="brand-name"><strong>JARVIS</strong><small>PERSONAL ASSISTANT</small></span>
         </a>
         <div class="topbar-status">
           <span class="status-light"></span>
@@ -56,7 +56,7 @@
 
           <form class="composer" id="composer">
             <label class="visually-hidden" for="input">Message JARVIS</label>
-            <input id="input" name="message" autocomplete="off" placeholder="Ask for the time, a calculation, or a web search..." />
+            <input id="input" name="message" autocomplete="off" placeholder="Ask for a briefing, search saved info, set a reminder..." />
             <button class="voice-button" id="voice-button" type="button" aria-label="Start voice input" title="Start voice input">VOICE</button>
             <button class="send-button" type="submit"><span>Send</span><span aria-hidden="true">&#8594;</span></button>
           </form>
@@ -91,6 +91,7 @@
           <section class="info-panel command-panel">
             <div class="panel-label"><span>QUICK COMMANDS</span><span class="panel-index">03</span></div>
             <button class="command-button" type="button" data-command="What time is it?">What time is it?<span>&#8599;</span></button>
+            <button class="command-button" type="button" data-command="Brief me">Brief me<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Tell me a joke">Tell me a joke<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Help">Show commands<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="List my tasks">List my tasks<span>&#8599;</span></button>
