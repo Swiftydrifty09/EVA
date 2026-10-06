@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#111b18" />
     <title>JARVIS | Local Assistant</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
     <script src="/main.js" defer></script>
   </head>
@@ -74,11 +76,25 @@
             <button class="command-button" type="button" data-command="What time is it?">What time is it?<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Tell me a joke">Tell me a joke<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Help">Show commands<span>&#8599;</span></button>
+            <button class="command-button" type="button" data-command="List my tasks">List my tasks<span>&#8599;</span></button>
+            <button class="command-button" type="button" data-command="What do you remember?">What do you remember?<span>&#8599;</span></button>
           </section>
 
           <section class="info-panel tools-panel" aria-label="Local assistant tools">
             <div class="panel-label"><span>AGENT TOOLS</span><span class="panel-index">03</span></div>
+            <div class="local-memory">
+              <label for="profile-select">ACTIVE PROFILE</label>
+              <select id="profile-select" aria-label="Choose local profile"></select>
+              <label for="profile-name">PROFILE NAME</label>
+              <div class="profile-controls">
+                <input id="profile-name" type="text" maxlength="80" autocomplete="given-name" placeholder="Name this profile" />
+                <button id="profile-save" type="button">Save</button>
+              </div>
+              <button class="profile-add-button" id="profile-add" type="button">Add profile</button>
+              <p id="memory-summary" aria-live="polite">0 saved items · stored only in this browser</p>
+            </div>
             <button class="command-button" id="weather-button" type="button">Local weather<span>&#8599;</span></button>
+            <button class="command-button" id="map-button" type="button">Open map<span>&#8599;</span></button>
             <button class="command-button" id="news-button" type="button">Latest headlines<span>&#8599;</span></button>
             <button class="command-button" id="file-button" type="button">Scan a text file<span>&#8599;</span></button>
             <input class="visually-hidden" id="file-input" type="file" accept=".txt,.md,.csv,.json,.log,text/plain,text/markdown,text/csv,application/json" />
@@ -87,7 +103,7 @@
             <div class="voice-settings">
               <label for="voice-select">SPOKEN VOICE</label>
               <select id="voice-select" aria-label="Choose spoken voice">
-                <option value="">Loading Google US English voice 4…</option>
+                <option value="">Loading available voices…</option>
               </select>
               <button class="voice-test-button" id="voice-test-button" type="button">Preview voice</button>
             </div>

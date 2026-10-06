@@ -112,7 +112,7 @@ function generateLocalReply(message) {
   }
 
   if (/\b(help|commands|what can you do)\b/.test(normalized)) {
-    return "Try: 'What time is it?', 'What is 24 * (3 + 2)?', 'Tell me a joke', 'Search for space news', or 'Open YouTube'.";
+    return "Try: 'What time is it?', 'Convert 5 miles to km', 'What is 24 * (3 + 2)?', 'Tell me a joke', 'Search for space news', or 'Open YouTube'. In the browser, you can also remember facts, manage local tasks and notes, and use 'repeat that' for voice playback.";
   }
 
   if (/\b(clear|clear chat|clear conversation)\b/.test(normalized)) {
@@ -294,6 +294,65 @@ app.get("/api/news", async (req, res) => {
 
   res.set("Cache-Control", "public, max-age=300");
   res.json({ source: "U.S. and world news", sources: availableSources, headlines });
+});
+
+let lastMapSearchAt = 0;
+const mapSearchCache = new Map();
+
+app.get("/api/map/search", async (req, res) => {
+  const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  if (!query || query.length > 120) {
+    return res.status(400).json({ error: "Enter a place name under 120 characters." });
+  }
+
+  const cacheKey = query.toLocaleLowerCase();
+  const cached = mapSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.result);
+  }
+
+  const elapsed = Date.now() - lastMapSearchAt;
+  if (elapsed < 1000) {
+    return res.status(429).json({ error: "Please wait a moment before searching for another place." });
+  }
+  lastMapSearchAt = Date.now();
+
+  try {
+    const searchUrl = new URL("https://nominatim.openstreetmap.org/search");
+    searchUrl.search = new URLSearchParams({ q: query, format: "jsonv2", limit: "1" });
+    const response = await fetch(searchUrl, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "JARVIS-Local-Assistant/1.0"
+      },
+      signal: AbortSignal.timeout(10_000)
+    });
+    if (!response.ok) throw new Error(`Place search returned HTTP ${response.status}.`);
+
+    const results = await response.json();
+    const result = Array.isArray(results) ? results[0] : null;
+    const latitude = Number(result?.lat);
+    const longitude = Number(result?.lon);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      return res.status(404).json({ error: `No map results found for “${query}”.` });
+    }
+
+    const mapResult = {
+      name: typeof result.display_name === "string" ? result.display_name : query,
+      latitude,
+      longitude
+    };
+    if (mapSearchCache.size >= 100) {
+      mapSearchCache.delete(mapSearchCache.keys().next().value);
+    }
+    mapSearchCache.set(cacheKey, { result: mapResult, expiresAt: Date.now() + 10 * 60 * 1000 });
+    res.set("Cache-Control", "no-store");
+    res.json(mapResult);
+  } catch (error) {
+    console.error("Map place search error:", error.message);
+    res.status(502).json({ error: "Place search is unavailable right now. Please try again shortly." });
+  }
 });
 
 app.post("/api/chat", async (req, res) => {

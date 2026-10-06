@@ -16,6 +16,9 @@ const timerList = document.getElementById("timer-list");
 const speechSupported = "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
 const timerStorageKey = "jarvis-timers";
 const speechVoiceKey = "jarvis-speech-voice";
+const localDataStorageKey = "jarvis-local-data";
+const profilesStorageKey = "jarvis-profiles";
+const activeProfileStorageKey = "jarvis-active-profile";
 const isGoogleEnglishVoice = (voice) =>
   /\bgoogle\b/i.test(voice.name) && /^en[-_]/i.test(voice.lang);
 const isVoiceFour = (voice) =>
@@ -31,6 +34,174 @@ let voiceOnlyMode = false;
 let speechPending = false;
 let voiceRestartTimer;
 let voiceModeInputFailed = false;
+const profileState = loadProfiles();
+let profiles = profileState.profiles;
+let activeProfileId = profileState.activeProfileId;
+let localData = profiles.find((profile) => profile.id === activeProfileId);
+
+function normalizeProfile(stored, fallbackId) {
+  if (!stored || typeof stored !== "object") return null;
+  return {
+    id: typeof stored.id === "string" && stored.id ? stored.id : fallbackId,
+    profile: {
+      name: typeof stored.profile?.name === "string" ? stored.profile.name.slice(0, 80) : ""
+    },
+    voiceName: typeof stored.voiceName === "string" ? stored.voiceName : "",
+    facts: Array.isArray(stored.facts)
+      ? stored.facts.filter((fact) => typeof fact === "string").slice(-100)
+      : [],
+    tasks: Array.isArray(stored.tasks)
+      ? stored.tasks.filter((task) =>
+          task && typeof task.id === "string" && typeof task.title === "string" &&
+          Number.isFinite(task.createdAt) &&
+          (task.dueAt == null || (typeof task.dueAt === "number" && Number.isFinite(task.dueAt))) &&
+          ["open", "done"].includes(task.status)
+        ).slice(-100)
+      : [],
+    notes: Array.isArray(stored.notes)
+      ? stored.notes.filter((note) =>
+          note && typeof note.id === "string" && typeof note.title === "string" &&
+          typeof note.content === "string" && Number.isFinite(note.createdAt)
+        ).slice(-100)
+      : []
+  };
+}
+
+function loadProfiles() {
+  try {
+    const savedProfiles = JSON.parse(localStorage.getItem(profilesStorageKey) || "null");
+    if (Array.isArray(savedProfiles)) {
+      const seen = new Set();
+      const profiles = savedProfiles
+        .map((profile, index) => normalizeProfile(profile, `profile-${index + 1}`))
+        .filter((profile) => profile && !seen.has(profile.id) && seen.add(profile.id));
+      if (profiles.length) {
+        const savedActiveId = localStorage.getItem(activeProfileStorageKey);
+        return {
+          profiles,
+          activeProfileId: profiles.some((profile) => profile.id === savedActiveId)
+            ? savedActiveId
+            : profiles[0].id
+        };
+      }
+    }
+  } catch {
+    // Use the previous single-profile data format when profile storage is absent or invalid.
+  }
+
+  let legacyData = null;
+  let legacyVoice = "";
+  try {
+    legacyData = JSON.parse(localStorage.getItem(localDataStorageKey) || "null");
+    legacyVoice = localStorage.getItem(speechVoiceKey) || "";
+  } catch {
+    // A fresh in-memory profile is still usable when browser storage is unavailable.
+  }
+  const migrated = normalizeProfile({
+    ...legacyData,
+    voiceName: legacyVoice
+  }, "default");
+  const defaultProfile = migrated || normalizeProfile({}, "default");
+  return { profiles: [defaultProfile], activeProfileId: defaultProfile.id };
+}
+
+function saveLocalData() {
+  try {
+    localStorage.setItem(profilesStorageKey, JSON.stringify(profiles));
+    localStorage.setItem(activeProfileStorageKey, activeProfileId);
+    updateMemorySummary();
+    return true;
+  } catch (error) {
+    toolStatus.textContent = `This change is available only until the page closes because browser storage failed: ${error.message}`;
+    updateMemorySummary();
+    return false;
+  }
+}
+
+function updateMemorySummary() {
+  const summary = document.getElementById("memory-summary");
+  if (summary) {
+    const items = localData.facts.length + localData.tasks.length + localData.notes.length;
+    const name = localData.profile.name || "Unnamed profile";
+    summary.textContent = `${items} saved item${items === 1 ? "" : "s"} for ${name} · stored only in this browser`;
+  }
+}
+
+function createLocalId() {
+  return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function renderProfiles() {
+  const profileSelect = document.getElementById("profile-select");
+  profileSelect.replaceChildren();
+  profiles.forEach((profile) => {
+    const name = profile.profile.name || "Unnamed profile";
+    profileSelect.add(new Option(name, profile.id));
+  });
+  profileSelect.value = activeProfileId;
+  document.getElementById("profile-name").value = localData.profile.name;
+  updateMemorySummary();
+}
+
+function setActiveProfile(profileId) {
+  const selectedProfile = profiles.find((profile) => profile.id === profileId);
+  if (!selectedProfile) return;
+  localData = selectedProfile;
+  activeProfileId = profileId;
+  renderProfiles();
+  let saved = false;
+  try {
+    localStorage.setItem(activeProfileStorageKey, activeProfileId);
+    saved = true;
+  } catch {
+    // The selected profile remains active until this page closes.
+  }
+  if ("speechSynthesis" in window) populateSpeechVoices();
+  toolStatus.textContent = saved
+    ? `Switched to ${localData.profile.name || "Unnamed profile"}; its saved items and spoken voice are active.`
+    : "Profile switched for this session, but browser storage is unavailable.";
+}
+
+function syncProfilesAcrossTabs(event) {
+  if (event.key !== null && event.key !== profilesStorageKey && event.key !== activeProfileStorageKey) return;
+
+  const profileState = loadProfiles();
+  profiles = profileState.profiles;
+  activeProfileId = profileState.activeProfileId;
+  localData = profiles.find((profile) => profile.id === activeProfileId);
+  renderProfiles();
+  if ("speechSynthesis" in window) populateSpeechVoices();
+  toolStatus.textContent = `Profiles synced from another tab. Active profile: ${localData.profile.name || "Unnamed profile"}.`;
+}
+
+function addProfile(name) {
+  const normalizedName = name.trim().slice(0, 80);
+  if (!normalizedName) {
+    toolStatus.textContent = "Enter a name before adding a profile.";
+    return;
+  }
+  const existing = profiles.find((profile) =>
+    profile.profile.name.toLocaleLowerCase() === normalizedName.toLocaleLowerCase()
+  );
+  if (existing) {
+    setActiveProfile(existing.id);
+    toolStatus.textContent = `A profile named ${normalizedName} already exists; switched to it.`;
+    return;
+  }
+  const profile = normalizeProfile({
+    id: createLocalId(),
+    profile: { name: normalizedName }
+  }, createLocalId());
+  profiles.push(profile);
+  localData = profile;
+  activeProfileId = profile.id;
+  renderProfiles();
+  const saved = saveLocalData();
+  toolStatus.textContent = saved
+    ? `Added profile ${normalizedName}. Choose its spoken voice below.`
+    : `Added ${normalizedName} for this session, but browser storage is unavailable.`;
+  if ("speechSynthesis" in window) populateSpeechVoices();
+}
 
 function addMessage(text, sender, timestamp = new Date(), persist = true) {
   const message = document.createElement("article");
@@ -79,7 +250,7 @@ function restoreMessages() {
   }
 
   if (chat.childElementCount === 0) {
-    addMessage("Good day. Local systems are ready. Ask for the time, set a timer, get weather or headlines, or open Agent Tools for file and screen utilities.", "assistant");
+    addMessage("Good day. Local systems are ready. Ask for the time, convert units, set a timer, get weather or headlines, or open Agent Tools for file and screen utilities.", "assistant");
   }
 }
 
@@ -150,7 +321,7 @@ function getReply(message) {
   if (/\b(date|day|today)\b/.test(normalized)) return `Today is ${new Date().toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`;
   if (/\b(joke|make me laugh)\b/.test(normalized)) return "I told my computer I needed a break. It said: 'No problem, I'll go to sleep.'";
   if (/\b(who are you|your name)\b/.test(normalized)) return "I am JARVIS, your local assistant. I can handle a few useful commands without connecting to an AI service.";
-  if (/\b(help|commands|what can you do)\b/.test(normalized)) return "Try: 'What time is it?', 'What is 24 * (3 + 2)?', 'Set a timer for 5 minutes', 'Remind me to stretch in 10 seconds', 'weather', or 'news'. Use Agent Tools for file scans, screen capture, voice selection, and clipboard.";
+  if (/\b(help|commands|what can you do)\b/.test(normalized)) return "Try: 'What time is it?', 'Convert 5 miles to km', 'Set a timer for 5 minutes', 'Remember that I prefer concise answers', 'What do you remember?', 'Create a task: review the release', 'List tasks', or 'Save a note: launch checklist'. Say 'repeat that' to hear the last reply again; in full-screen voice mode, say 'stop listening' to exit.";
   if (/\b(clear|clear chat|clear conversation)\b/.test(normalized)) {
     clearConversation();
     return "Conversation cleared.";
@@ -254,6 +425,226 @@ function getLocalClockReply(message) {
   return null;
 }
 
+function describeLocalSave(saved) {
+  return saved ? "" : " It is only saved for this tab session because browser storage is unavailable.";
+}
+
+function addLocalListCard(title, entries, emptyText) {
+  const card = addToolCard(title, "");
+  if (!entries.length) {
+    card.querySelector(".message-body").textContent = emptyText;
+    return;
+  }
+  const list = document.createElement("ul");
+  list.className = "local-item-list";
+  entries.forEach((entry) => {
+    const item = document.createElement("li");
+    item.textContent = entry;
+    list.append(item);
+  });
+  card.append(list);
+}
+
+function convertMeasurement(message) {
+  const match = message.trim().replace(/[?.!]+$/, "").match(
+    /^convert\s+(-?\d+(?:\.\d+)?)\s+(?:from\s+)?([a-z]+)\s+to\s+([a-z]+)$/i
+  );
+  if (!match) return null;
+
+  const units = {
+    m: ["length", "m", 1], meter: ["length", "m", 1], meters: ["length", "m", 1],
+    km: ["length", "km", 1000], kilometer: ["length", "km", 1000], kilometers: ["length", "km", 1000],
+    mi: ["length", "mi", 1609.344], mile: ["length", "mi", 1609.344], miles: ["length", "mi", 1609.344],
+    ft: ["length", "ft", 0.3048], foot: ["length", "ft", 0.3048], feet: ["length", "ft", 0.3048],
+    in: ["length", "in", 0.0254], inch: ["length", "in", 0.0254], inches: ["length", "in", 0.0254],
+    kg: ["mass", "kg", 1], kilogram: ["mass", "kg", 1], kilograms: ["mass", "kg", 1],
+    g: ["mass", "g", 0.001], gram: ["mass", "g", 0.001], grams: ["mass", "g", 0.001],
+    lb: ["mass", "lb", 0.45359237], lbs: ["mass", "lb", 0.45359237], pound: ["mass", "lb", 0.45359237], pounds: ["mass", "lb", 0.45359237],
+    oz: ["mass", "oz", 0.028349523125], ounce: ["mass", "oz", 0.028349523125], ounces: ["mass", "oz", 0.028349523125],
+    l: ["volume", "L", 1], liter: ["volume", "L", 1], liters: ["volume", "L", 1], litre: ["volume", "L", 1], litres: ["volume", "L", 1],
+    ml: ["volume", "mL", 0.001], milliliter: ["volume", "mL", 0.001], milliliters: ["volume", "mL", 0.001],
+    gal: ["volume", "US gal", 3.785411784], gallon: ["volume", "US gal", 3.785411784], gallons: ["volume", "US gal", 3.785411784],
+    c: ["temperature", "°C"], celsius: ["temperature", "°C"],
+    f: ["temperature", "°F"], fahrenheit: ["temperature", "°F"]
+  };
+  const [, rawValue, sourceName, targetName] = match;
+  const source = units[sourceName.toLocaleLowerCase()];
+  const target = units[targetName.toLocaleLowerCase()];
+  if (!source || !target) {
+    return "I don’t recognize one of those units. Try length (miles, km, feet), mass (lb, kg, oz), volume (gallons, liters), or temperature (Fahrenheit, Celsius).";
+  }
+  if (source[0] !== target[0]) {
+    return "Those units measure different things. Choose two length, mass, volume, or temperature units.";
+  }
+
+  const value = Number(rawValue);
+  let converted;
+  if (source[0] === "temperature") {
+    const celsius = source[1] === "°F" ? (value - 32) * 5 / 9 : value;
+    converted = target[1] === "°F" ? celsius * 9 / 5 + 32 : celsius;
+  } else {
+    converted = value * source[2] / target[2];
+  }
+  if (!Number.isFinite(converted)) return "That value is too large to convert.";
+
+  const formatted = Number(converted.toPrecision(6)).toLocaleString(undefined, { maximumSignificantDigits: 6 });
+  return `${rawValue} ${source[1]} = ${formatted} ${target[1]}.`;
+}
+
+function runLocalCommand(message) {
+  const text = message.trim().replace(/[?.!]+$/, "");
+  const normalized = text.toLocaleLowerCase();
+
+  const conversion = convertMeasurement(text);
+  if (conversion) return conversion;
+
+  const setName = text.match(/^(?:my name is|call me)\s+(.+)$/i);
+  if (setName) {
+    const name = setName[1].trim().replace(/^["']|["']$/g, "").slice(0, 80);
+    if (!name) return "Tell me what name you would like me to remember.";
+    localData.profile.name = name;
+    const saved = saveLocalData();
+    renderProfiles();
+    return `Got it${describeLocalSave(saved)} I’ll call you ${name}.`;
+  }
+
+  const remember = text.match(/^(?:remember(?: that)?|save that)\s+(.+)$/i);
+  if (remember) {
+    const fact = remember[1].trim().replace(/^["']|["']$/g, "").slice(0, 300);
+    const nameFact = fact.match(/^my name is\s+(.+)$/i);
+    if (nameFact) {
+      localData.profile.name = nameFact[1].trim().slice(0, 80);
+      const saved = saveLocalData();
+      renderProfiles();
+      return `I’ll remember your name is ${localData.profile.name}.${describeLocalSave(saved)}`;
+    }
+    if (!fact) return "Tell me what you would like me to remember.";
+    if (!localData.facts.some((entry) => entry.toLocaleLowerCase() === fact.toLocaleLowerCase())) {
+      localData.facts.push(fact);
+      localData.facts = localData.facts.slice(-100);
+    }
+    const saved = saveLocalData();
+    return `I’ll remember: ${fact}.${describeLocalSave(saved)}`;
+  }
+
+  if (/^(?:what do you know about me|what do you remember|show my profile|my profile)$/.test(normalized)) {
+    const details = [
+      localData.profile.name ? `Your name is ${localData.profile.name}` : "",
+      ...localData.facts
+    ].filter(Boolean);
+    return details.length ? `Here’s what I have saved locally: ${details.join("; ")}.` : "I don’t have any profile details or facts saved yet.";
+  }
+
+  const forget = text.match(/^(?:forget|remove (?:fact|memory)) (?:that )?(.+)$/i);
+  if (forget) {
+    const query = forget[1].trim().toLocaleLowerCase();
+    const previousCount = localData.facts.length;
+    localData.facts = localData.facts.filter((fact) => !fact.toLocaleLowerCase().includes(query));
+    let removed = previousCount !== localData.facts.length;
+    if (localData.profile.name && (["my name", "name"].includes(query) || localData.profile.name.toLocaleLowerCase().includes(query))) {
+      localData.profile.name = "";
+      renderProfiles();
+      removed = true;
+    }
+    if (!removed) return `I couldn’t find a saved fact matching “${forget[1]}”.`;
+    const saved = saveLocalData();
+    return `Forgot the matching saved detail.${describeLocalSave(saved)}`;
+  }
+
+  const addTask = text.match(/^(?:create|add|make)\s+(?:a\s+)?task(?:\s+(?:called|to)\s+|:\s*|\s+)(.+)$/i);
+  if (addTask) {
+    let title = addTask[1].trim();
+    let dueAt = null;
+    const due = title.match(/\s+(?:for|due|by)\s+(today|tomorrow)$/i);
+    if (due) {
+      const dueDate = new Date();
+      if (due[1].toLowerCase() === "tomorrow") dueDate.setDate(dueDate.getDate() + 1);
+      dueDate.setHours(23, 59, 59, 999);
+      dueAt = dueDate.getTime();
+      title = title.slice(0, due.index).trim();
+    }
+    title = title.replace(/^["']|["']$/g, "").slice(0, 200);
+    if (!title) return "Give the task a short description, for example: “Create a task: review the release”.";
+    const task = { id: createLocalId(), title, createdAt: Date.now(), dueAt, status: "open" };
+    localData.tasks.push(task);
+    localData.tasks = localData.tasks.slice(-100);
+    const saved = saveLocalData();
+    return `Task added: ${title}${dueAt ? `, due ${new Date(dueAt).toLocaleDateString()}` : ""}.${describeLocalSave(saved)}`;
+  }
+
+  if (/^(?:(?:list|show) (?:my )?|what(?:'s| is| are) (?:on )?(?:my )?)(?:tasks|to-?dos)$/.test(normalized)) {
+    const openTasks = localData.tasks.filter((task) => task.status === "open");
+    addLocalListCard("YOUR TASKS", openTasks.map((task, index) => {
+      const due = task.dueAt ? ` · due ${new Date(task.dueAt).toLocaleDateString()}` : "";
+      return `${index + 1}. ${task.title}${due}`;
+    }), "You have no open tasks. Try “Create a task: …”.");
+    return openTasks.length ? `You have ${openTasks.length} open task${openTasks.length === 1 ? "" : "s"}.` : "You have no open tasks.";
+  }
+
+  const completeTask = text.match(/^(?:complete|finish|mark)\s+(?:task\s+)?(.+?)(?:\s+done)?$/i);
+  if (completeTask && /^(?:complete|finish|mark)\b/i.test(text)) {
+    const query = completeTask[1].trim().replace(/^#/, "");
+    const openTasks = localData.tasks.filter((task) => task.status === "open");
+    const taskIndex = /^\d+$/.test(query) ? Number(query) - 1 : -1;
+    const matches = taskIndex >= 0
+      ? [openTasks[taskIndex]].filter(Boolean)
+      : openTasks.filter((task) => task.title.toLocaleLowerCase() === query.toLocaleLowerCase());
+    if (matches.length !== 1) {
+      return matches.length > 1
+        ? "More than one task matches. Please use its number from “list tasks”."
+        : `I couldn’t find an open task matching “${query}”. Use “list tasks” to see task numbers.`;
+    }
+    matches[0].status = "done";
+    const saved = saveLocalData();
+    return `Completed: ${matches[0].title}.${describeLocalSave(saved)}`;
+  }
+
+  const removeTask = text.match(/^(?:delete|remove|cancel)\s+(?:task\s+)?(.+)$/i);
+  if (removeTask) {
+    const query = removeTask[1].trim().replace(/^#/, "");
+    const openTasks = localData.tasks.filter((task) => task.status === "open");
+    const taskIndex = /^\d+$/.test(query) ? Number(query) - 1 : -1;
+    const target = taskIndex >= 0
+      ? openTasks[taskIndex]
+      : openTasks.find((task) => task.title.toLocaleLowerCase() === query.toLocaleLowerCase());
+    if (!target) return `I couldn’t find an open task matching “${query}”.`;
+    localData.tasks = localData.tasks.filter((task) => task.id !== target.id);
+    const saved = saveLocalData();
+    return `Removed task: ${target.title}.${describeLocalSave(saved)}`;
+  }
+
+  const saveNote = text.match(/^(?:save|add|write)\s+(?:a\s+)?note(?:\s+(?:called|titled)\s+|:\s*|\s+)(.+)$/i);
+  if (saveNote) {
+    const content = saveNote[1].trim().replace(/^["']|["']$/g, "").slice(0, 2000);
+    if (!content) return "Tell me what you would like in the note.";
+    const note = {
+      id: createLocalId(),
+      title: content.split(/\r?\n/)[0].slice(0, 60),
+      content,
+      createdAt: Date.now()
+    };
+    localData.notes.push(note);
+    localData.notes = localData.notes.slice(-100);
+    const saved = saveLocalData();
+    return `Saved a local note: ${note.title}.${describeLocalSave(saved)}`;
+  }
+
+  if (/^(?:(?:list|show|read) (?:my )?notes|what are my notes)$/.test(normalized)) {
+    addLocalListCard("YOUR NOTES", localData.notes.slice().reverse().map((note, index) =>
+      `${index + 1}. ${note.title} · ${new Date(note.createdAt).toLocaleDateString()}`
+    ), "You have no saved notes. Try “Save a note: …”.");
+    return localData.notes.length ? `You have ${localData.notes.length} saved note${localData.notes.length === 1 ? "" : "s"}.` : "You have no saved notes.";
+  }
+
+  const readLastNote = /^(?:read|show) (?:my )?(?:last|latest) note$/.test(normalized);
+  if (readLastNote) {
+    const note = localData.notes[localData.notes.length - 1];
+    return note ? `Your latest note, ${note.title}: ${note.content}` : "You don’t have any saved notes yet.";
+  }
+
+  return null;
+}
+
 async function speak(text) {
   if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
     toolStatus.textContent = "Speech output is not supported by this browser.";
@@ -284,22 +675,22 @@ async function speak(text) {
   }
 
   if (sequence !== speechSequence) return;
-  const voice = voices.find(isVoiceFour);
+  const voice = voices.find((item) => item.name === localData.voiceName) ||
+    voices.find(isVoiceFour) ||
+    voices.find((item) => item.default) ||
+    voices[0];
   if (!voice) {
     speechPending = false;
-    toolStatus.textContent = "Google US English voice 4 is unavailable in this browser.";
+    toolStatus.textContent = "No speech voices are available in this browser.";
     scheduleVoiceListening();
     return;
   }
 
-  if (voiceSelect.value !== voice.name) {
-    voiceSelect.value = voice.name;
-    try {
-      localStorage.setItem(speechVoiceKey, voice.name);
-    } catch {
-      // The selected voice remains active for this session.
-    }
+  if (localData.voiceName !== voice.name) {
+    localData.voiceName = voice.name;
+    saveLocalData();
   }
+  voiceSelect.value = voice.name;
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.voice = voice;
@@ -343,38 +734,28 @@ function populateSpeechVoices() {
     return;
   }
 
-  let savedVoice = "";
-  try {
-    savedVoice = localStorage.getItem(speechVoiceKey) || "";
-  } catch {
-    // Speech settings remain usable even when browser storage is unavailable.
-  }
-  const selectedVoice = voiceSelect.value || savedVoice;
-  const allVoices = window.speechSynthesis.getVoices();
-  const voices = allVoices.filter(isVoiceFour);
+  const voices = window.speechSynthesis.getVoices();
   voiceSelect.replaceChildren();
   if (voices.length === 0) {
-    voiceSelect.add(new Option("Google US English voice 4 unavailable", ""));
+    voiceSelect.add(new Option("No browser voices available", ""));
     voiceSelect.disabled = true;
-    toolStatus.textContent = "Google US English voice 4 is unavailable in this browser.";
+    toolStatus.textContent = "No speech voices are available in this browser.";
     return;
   }
   voiceSelect.disabled = false;
   voices.forEach((voice) => {
     voiceSelect.add(new Option(`${voice.name} (${voice.lang})`, voice.name));
   });
-  if (voices.some((voice) => voice.name === selectedVoice)) {
-    voiceSelect.value = selectedVoice;
-  } else {
-    voiceSelect.value = voices[0].name;
-    try {
-      localStorage.setItem(speechVoiceKey, voices[0].name);
-    } catch {
-      // The voice remains selected for this session.
-    }
+  if (!voices.some((voice) => voice.name === localData.voiceName)) {
+    const defaultVoice = voices.find(isVoiceFour) ||
+      voices.find((voice) => voice.default) ||
+      voices[0];
+    localData.voiceName = defaultVoice.name;
+    saveLocalData();
   }
-  const selected = voices.find((voice) => voice.name === voiceSelect.value);
-  if (selected) toolStatus.textContent = `Google English voice ready: ${selected.name}.`;
+  voiceSelect.value = localData.voiceName;
+  const selected = voices.find((voice) => voice.name === localData.voiceName);
+  if (selected) toolStatus.textContent = `Spoken voice for ${localData.profile.name || "this profile"}: ${selected.name}.`;
 }
 
 function loadTimers() {
@@ -541,8 +922,12 @@ function weatherLabel(code) {
 
 function getPosition() {
   return new Promise((resolve, reject) => {
+    if (!window.isSecureContext) {
+      reject(new Error("Browser location needs a secure page. Open JARVIS with HTTPS or localhost."));
+      return;
+    }
     if (!navigator.geolocation) {
-      reject(new Error("Location is not available in this browser."));
+      reject(new Error("This browser does not provide location access. You can still use Google Maps directly."));
       return;
     }
     navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -563,6 +948,8 @@ async function showWeather() {
       latitude,
       longitude,
       current: "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
+      temperature_unit: "fahrenheit",
+      wind_speed_unit: "mph",
       timezone: "auto"
     });
     const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
@@ -573,8 +960,8 @@ async function showWeather() {
       throw new Error("Weather feed did not return current conditions.");
     }
 
-    const temperatureUnit = data.current_units?.temperature_2m || "°C";
-    const windUnit = data.current_units?.wind_speed_10m || "km/h";
+    const temperatureUnit = data.current_units?.temperature_2m || "°F";
+    const windUnit = data.current_units?.wind_speed_10m || "mph";
     const description = `Current conditions near you: ${weatherLabel(current.weather_code)}, ${current.temperature_2m}${temperatureUnit}, humidity ${current.relative_humidity_2m}%, wind ${current.wind_speed_10m} ${windUnit}. Approximate coordinates were shared with Open-Meteo.`;
     addToolCard("LIVE WEATHER · OPEN-METEO", description);
     toolStatus.textContent = "Weather updated from Open-Meteo. Location was rounded to about 1 km.";
@@ -587,6 +974,216 @@ async function showWeather() {
     toolStatus.textContent = "Weather unavailable. No location is stored.";
     speak(reason);
   }
+}
+
+function renderMap(frame, latitude, longitude, label, status) {
+  const zoom = 15;
+  const tileCount = 2 ** zoom;
+  const normalizedLatitude = Math.max(-85.0511, Math.min(85.0511, latitude));
+  const latitudeRadians = normalizedLatitude * Math.PI / 180;
+  const tileX = (longitude + 180) / 360 * tileCount;
+  const tileY = (1 - Math.asinh(Math.tan(latitudeRadians)) / Math.PI) / 2 * tileCount;
+  const centerTileX = Math.floor(tileX);
+  const centerTileY = Math.floor(tileY);
+  const viewport = document.createElement("div");
+  viewport.className = "map-viewport";
+  viewport.setAttribute("role", "img");
+  viewport.setAttribute("aria-label", `Map showing ${label}`);
+
+  const tileGrid = document.createElement("div");
+  tileGrid.className = "map-tile-grid";
+  tileGrid.style.setProperty("--map-shift-x", `${(1 / 6 - (tileX - centerTileX) / 3) * 100}%`);
+  tileGrid.style.setProperty("--map-shift-y", `${(1 / 6 - (tileY - centerTileY) / 3) * 100}%`);
+  for (let row = -1; row <= 1; row += 1) {
+    for (let column = -1; column <= 1; column += 1) {
+      const x = (centerTileX + column + tileCount) % tileCount;
+      const y = centerTileY + row;
+      const tile = document.createElement("img");
+      tile.alt = "";
+      tile.loading = "eager";
+      tile.addEventListener("error", () => {
+        status.textContent = "Some map tiles could not be loaded. Check your connection; you can still open this place in Google Maps.";
+      }, { once: true });
+      if (y >= 0 && y < tileCount) {
+        tile.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${y}/${x}`;
+      }
+      tileGrid.append(tile);
+    }
+  }
+
+  const marker = document.createElement("span");
+  marker.className = "map-marker";
+  marker.setAttribute("aria-hidden", "true");
+  viewport.append(tileGrid, marker);
+
+  const externalLink = document.createElement("a");
+  const externalUrl = new URL("https://www.google.com/maps/search/");
+  externalUrl.search = new URLSearchParams({
+    api: "1",
+    query: `${latitude},${longitude}`
+  });
+  externalLink.href = externalUrl.toString();
+  externalLink.target = "_blank";
+  externalLink.rel = "noopener noreferrer";
+  externalLink.textContent = "Open in Google Maps";
+
+  const attribution = document.createElement("p");
+  attribution.className = "map-attribution";
+  attribution.textContent = "Map tiles © Esri, HERE, Garmin, FAO, NOAA, USGS and other providers.";
+
+  frame.replaceChildren(viewport, attribution, externalLink);
+}
+
+function createGoogleMapsLink(query, label) {
+  const link = document.createElement("a");
+  const url = new URL("https://www.google.com/maps/search/");
+  url.search = new URLSearchParams({ api: "1", query });
+  link.href = url.toString();
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = label;
+  return link;
+}
+
+function createGoogleMapsLocationUrl(latitude, longitude) {
+  const url = new URL("https://www.google.com/maps/search/");
+  url.search = new URLSearchParams({
+    api: "1",
+    query: `${latitude},${longitude}`
+  });
+  return url.toString();
+}
+
+function createGoogleMapsLocationFallback() {
+  const link = document.createElement("a");
+  link.href = createGoogleMapsLocationFallbackUrl();
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "Open Google Maps and use its location button";
+  return link;
+}
+
+function createGoogleMapsLocationFallbackUrl() {
+  const url = new URL("https://www.google.com/maps/");
+  url.search = new URLSearchParams({ api: "1", map_action: "map" });
+  return url.toString();
+}
+
+function createMapCard() {
+  const card = addToolCard(
+    "MAP · GOOGLE MAPS",
+    "Search for a place or choose your approximate location. Both actions open Google Maps. Location is requested only when you choose to share it."
+  );
+  const form = document.createElement("form");
+  form.className = "map-search-form";
+
+  const input = document.createElement("input");
+  input.type = "search";
+  input.maxLength = 120;
+  input.placeholder = "Search a city, address, or place";
+  input.setAttribute("aria-label", "Search for a place on the map");
+
+  const searchButton = document.createElement("button");
+  searchButton.type = "submit";
+  searchButton.textContent = "Search";
+
+  const locationButton = document.createElement("button");
+  locationButton.type = "button";
+  locationButton.textContent = "Use my location";
+
+  const status = document.createElement("p");
+  status.className = "map-status";
+  status.setAttribute("aria-live", "polite");
+
+  const frame = document.createElement("div");
+  frame.className = "map-frame-container";
+
+  form.append(input, searchButton, locationButton);
+  card.append(form, status, frame);
+  input.focus();
+  return { form, input, searchButton, locationButton, status, frame };
+}
+
+async function searchMapPlace(controls) {
+  const query = controls.input.value.trim();
+  if (!query) {
+    controls.status.textContent = "Enter a place to search for.";
+    return;
+  }
+  const mapsTab = window.open("about:blank", "_blank");
+  if (mapsTab) mapsTab.opener = null;
+  controls.searchButton.disabled = true;
+  controls.locationButton.disabled = true;
+  controls.frame.replaceChildren();
+  controls.status.textContent = `Searching for “${query}”…`;
+  try {
+    const searchUrl = new URL("/api/map/search", window.location.origin);
+    searchUrl.searchParams.set("q", query);
+    const response = await fetch(searchUrl);
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === "string" ? data.error : "Place search failed.");
+    }
+
+    const latitude = Number(data.latitude);
+    const longitude = Number(data.longitude);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      throw new Error("Place search returned invalid coordinates.");
+    }
+
+    const name = typeof data.name === "string" && data.name.trim() ? data.name : query;
+    renderMap(controls.frame, latitude, longitude, name, controls.status);
+    controls.status.textContent = `Showing ${name}. Opening Google Maps in a new tab; use the link below if it was blocked.`;
+    if (mapsTab && !mapsTab.closed) {
+      mapsTab.location.replace(createGoogleMapsLocationUrl(latitude, longitude));
+    }
+  } catch (error) {
+    if (mapsTab && !mapsTab.closed) mapsTab.close();
+    controls.status.textContent = error.message || "Place search is unavailable right now. Please try again shortly.";
+    controls.frame.replaceChildren(createGoogleMapsLink(query, `Open “${query}” in Google Maps`));
+  } finally {
+    controls.searchButton.disabled = false;
+    controls.locationButton.disabled = false;
+  }
+}
+
+async function showMap() {
+  const controls = createMapCard();
+  controls.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    runTool(() => searchMapPlace(controls));
+  });
+  controls.locationButton.addEventListener("click", () => {
+    const mapsTab = window.open(createGoogleMapsLocationFallbackUrl(), "_blank");
+    if (mapsTab) mapsTab.opener = null;
+    runTool(async () => {
+      controls.locationButton.disabled = true;
+      controls.status.textContent = "Google Maps is opening while JARVIS checks your approximate location…";
+      try {
+        const position = await getPosition();
+        const latitude = Number(position.coords.latitude.toFixed(2));
+        const longitude = Number(position.coords.longitude.toFixed(2));
+        renderMap(controls.frame, latitude, longitude, "your approximate location", controls.status);
+        controls.status.textContent = "Your approximate location is ready. Coordinates are rounded to about 1 km.";
+        if (mapsTab && !mapsTab.closed) {
+          mapsTab.location.replace(createGoogleMapsLocationUrl(latitude, longitude));
+        }
+      } catch (error) {
+        const reason = error.code === 1
+          ? "Location permission was denied. Allow location for this site in your browser settings, then try again."
+          : error.code === 2
+            ? "Your device or browser could not determine your location. Check that device location services are enabled."
+            : error.code === 3
+              ? "The location request timed out. Check your connection or device location settings, then try again."
+              : error.message || "Your location could not be read.";
+        controls.status.textContent = `${reason} Google Maps is open; use its location button to find yourself.`;
+        controls.frame.replaceChildren(createGoogleMapsLocationFallback());
+      } finally {
+        controls.locationButton.disabled = false;
+      }
+    });
+  });
 }
 
 async function showHeadlines() {
@@ -736,8 +1333,15 @@ function startVoiceRecognition(autoRestart = false) {
 
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript.trim();
-    if (voiceOnlyMode && /^(?:(?:please\s+)?(?:exit|leave|close|quit)(?:\s+the)?\s+(?:full[\s-]?screen\s+)?(?:voice|assistant)?\s*mode|go back|return to dashboard)[?.!]*$/i.test(transcript)) {
+    if (voiceOnlyMode && /^(?:(?:please\s+)?(?:exit|leave|close|quit)(?:\s+the)?\s+(?:full[\s-]?screen\s+)?(?:voice|assistant)?\s*mode|go back|return to dashboard|stop listening|mute (?:yourself|assistant))[?.!]*$/i.test(transcript)) {
       exitVoiceOnlyMode();
+      return;
+    }
+    if (/^(?:repeat(?: that| your last response)?|say that again)[?.!]*$/i.test(transcript)) {
+      const replies = chat.querySelectorAll(".message-assistant:not(.tool-message) .message-body");
+      const lastReply = replies[replies.length - 1]?.textContent;
+      if (lastReply) speak(lastReply);
+      else speak("There is no previous response to repeat.");
       return;
     }
     sendMessage(transcript);
@@ -938,6 +1542,14 @@ async function sendMessage(message) {
     return;
   }
 
+  const localReply = runLocalCommand(text);
+  if (localReply) {
+    addMessage(localReply, "assistant");
+    speak(localReply);
+    setActive(false);
+    return;
+  }
+
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
@@ -995,6 +1607,7 @@ async function runTool(task) {
 }
 
 document.getElementById("weather-button").addEventListener("click", () => runTool(showWeather));
+document.getElementById("map-button").addEventListener("click", () => runTool(showMap));
 document.getElementById("news-button").addEventListener("click", () => runTool(showHeadlines));
 document.getElementById("file-button").addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", () => runTool(() => scanSelectedFile(fileInput.files[0])));
@@ -1014,26 +1627,58 @@ document.getElementById("copy-button").addEventListener("click", async () => {
   }
 });
 document.getElementById("notification-button").addEventListener("click", () => enableNotifications());
-voiceSelect.addEventListener("change", () => {
-  try {
-    localStorage.setItem(speechVoiceKey, voiceSelect.value);
-  } catch {
-    toolStatus.textContent = "Voice changed for this session; browser storage is unavailable.";
-  }
-  const voice = window.speechSynthesis.getVoices()
-    .find((item) => isVoiceFour(item) && item.name === voiceSelect.value);
-  toolStatus.textContent = voice
-    ? `Using Google English voice: ${voice.name} (${voice.lang}).`
-    : "Google US English voice 4 is unavailable; speech output is disabled.";
-});
-document.getElementById("voice-test-button").addEventListener("click", () => {
-  const voice = window.speechSynthesis.getVoices()
-    .find((item) => isVoiceFour(item) && item.name === voiceSelect.value);
-  if (!voice) {
-    toolStatus.textContent = "Google US English voice 4 is unavailable in this browser.";
+const profileSelect = document.getElementById("profile-select");
+const profileNameInput = document.getElementById("profile-name");
+window.addEventListener("storage", syncProfilesAcrossTabs);
+profileSelect.addEventListener("change", () => setActiveProfile(profileSelect.value));
+document.getElementById("profile-save").addEventListener("click", () => {
+  const name = profileNameInput.value.trim().slice(0, 80);
+  const duplicate = profiles.find((profile) =>
+    profile.id !== activeProfileId &&
+    name &&
+    profile.profile.name.toLocaleLowerCase() === name.toLocaleLowerCase()
+  );
+  if (duplicate) {
+    toolStatus.textContent = `A profile named ${name} already exists. Switch to it or choose another name.`;
     return;
   }
-  toolStatus.textContent = `Previewing Google English voice: ${voice.name} (${voice.lang}).`;
+  localData.profile.name = name;
+  const saved = saveLocalData();
+  renderProfiles();
+  toolStatus.textContent = saved
+    ? name ? `Saved your local profile name as ${name}.` : "Cleared your local profile name."
+    : "The profile change is only available until this page closes because browser storage is unavailable.";
+});
+document.getElementById("profile-add").addEventListener("click", () => addProfile(profileNameInput.value));
+profileNameInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") document.getElementById("profile-save").click();
+});
+voiceSelect.addEventListener("change", () => {
+  if (!("speechSynthesis" in window)) {
+    toolStatus.textContent = "Speech synthesis is not supported in this browser.";
+    return;
+  }
+  const voice = window.speechSynthesis.getVoices().find((item) => item.name === voiceSelect.value);
+  if (!voice) {
+    toolStatus.textContent = "The selected browser voice is no longer available.";
+    return;
+  }
+  localData.voiceName = voice.name;
+  const saved = saveLocalData();
+  toolStatus.textContent = `Using ${voice.name} (${voice.lang}) for ${localData.profile.name || "this profile"}${saved ? "." : " for this session; browser storage is unavailable."}`;
+});
+document.getElementById("voice-test-button").addEventListener("click", () => {
+  if (!("speechSynthesis" in window)) {
+    toolStatus.textContent = "Speech synthesis is not supported in this browser.";
+    return;
+  }
+  const voice = window.speechSynthesis.getVoices()
+    .find((item) => item.name === localData.voiceName);
+  if (!voice) {
+    toolStatus.textContent = "The selected browser voice is unavailable.";
+    return;
+  }
+  toolStatus.textContent = `Previewing ${voice.name} (${voice.lang}) for ${localData.profile.name || "this profile"}.`;
   speak("Good day. Systems are online. How may I assist you?");
 });
 voiceModeEnter.addEventListener("click", enterVoiceOnlyMode);
@@ -1046,6 +1691,8 @@ if ("speechSynthesis" in window) {
   window.speechSynthesis.addEventListener("voiceschanged", populateSpeechVoices);
 }
 renderTimers();
+renderProfiles();
+updateMemorySummary();
 checkTimers();
 setInterval(checkTimers, 1000);
 
@@ -1055,3 +1702,13 @@ voiceStatus.textContent = speechSupported ? "VOICE INPUT AVAILABLE" : "VOICE INP
 restoreMessages();
 updateClock();
 setInterval(updateClock, 1000);
+
+window.addEventListener("load", () => {
+  if (!("serviceWorker" in navigator)) {
+    toolStatus.textContent = "Offline app installation is not supported by this browser.";
+    return;
+  }
+  navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+    toolStatus.textContent = `Offline app setup failed: ${error.message}`;
+  });
+});
