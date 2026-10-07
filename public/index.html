@@ -51,20 +51,62 @@
               <p class="eyebrow">VOICE &amp; COMMAND</p>
               <h1 id="conversation-title">Your assistant, at the ready.</h1>
             </div>
-            <button class="text-button" id="clear-button" type="button" title="Clear conversation">Clear</button>
+            <div class="conversation-actions">
+              <div class="workspace-modes" role="tablist" aria-label="JARVIS workspace">
+                <button class="workspace-mode-button is-selected" id="chat-mode-button" type="button" role="tab" aria-selected="true" aria-controls="chat-workspace">Chat</button>
+                <button class="workspace-mode-button" id="build-mode-button" type="button" role="tab" aria-selected="false" aria-controls="build-workspace">Build</button>
+              </div>
+              <button class="text-button" id="clear-button" type="button" title="Clear conversation">Clear</button>
+            </div>
           </div>
 
-          <div class="message-list" id="chat" role="log" aria-live="polite" aria-relevant="additions text"></div>
+          <div class="chat-workspace" id="chat-workspace" role="tabpanel" aria-labelledby="chat-mode-button">
+            <div class="message-list" id="chat" role="log" aria-live="polite" aria-relevant="additions text"></div>
 
-          <form class="composer" id="composer">
-            <label class="visually-hidden" for="input">Message JARVIS</label>
-            <input id="input" name="message" autocomplete="off" placeholder="Ask for a briefing, search saved info, set a reminder..." />
-            <button class="voice-button" id="voice-button" type="button" aria-label="Start voice input" title="Start voice input">VOICE</button>
-            <button class="send-button" type="submit"><span>Send</span><span aria-hidden="true">&#8594;</span></button>
-          </form>
+            <form class="composer" id="composer">
+              <label class="visually-hidden" for="input">Message JARVIS</label>
+              <input id="input" name="message" autocomplete="off" placeholder="Ask for a briefing, search saved info, set a reminder..." />
+              <button class="voice-button" id="voice-button" type="button" aria-label="Start voice input" title="Start voice input">VOICE</button>
+              <button class="send-button" type="submit"><span>Send</span><span aria-hidden="true">&#8594;</span></button>
+            </form>
 
-          <p class="privacy-note"><span class="status-light"></span> Local-first tools. External feeds and permissions are opt-in.</p>
-          <p class="shortcut-note"><kbd>Ctrl</kbd> + <kbd>K</kbd> focus chat <span>·</span> <kbd>Esc</kbd> close menu <span>·</span> <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> voice mode</p>
+            <p class="privacy-note"><span class="status-light"></span> Local-first tools. External feeds and permissions are opt-in.</p>
+            <p class="shortcut-note"><kbd>Ctrl</kbd> + <kbd>K</kbd> focus chat <span>·</span> <kbd>Esc</kbd> close menu <span>·</span> <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> voice mode</p>
+          </div>
+
+          <section class="build-mode-panel" id="build-workspace" role="tabpanel" aria-labelledby="build-mode-button" hidden>
+            <div class="build-file-row">
+              <div class="build-file-picker">
+                <label for="build-file-select">PROJECT FILE</label>
+                <select id="build-file-select" aria-label="Choose a project file">
+                  <option value="">Load project files</option>
+                </select>
+              </div>
+              <button class="text-button" id="build-reload-button" type="button">Reload file</button>
+            </div>
+
+            <div class="build-editors">
+              <label class="build-editor">
+                <span>CURRENT FILE</span>
+                <textarea id="build-source" readonly spellcheck="false" placeholder="Choose a project file to inspect it."></textarea>
+              </label>
+              <label class="build-editor">
+                <span>PROPOSED FILE</span>
+                <textarea id="build-proposal" spellcheck="false" placeholder="A model proposal will appear here. Review or edit it before applying."></textarea>
+              </label>
+            </div>
+
+            <form class="build-prompt-form" id="build-prompt-form">
+              <label for="build-request">WHAT SHOULD CHANGE</label>
+              <textarea id="build-request" maxlength="2000" rows="2" placeholder="Describe a change to the selected file"></textarea>
+              <div class="build-controls">
+                <p id="build-status" role="status" aria-live="polite">Choose a project file to begin.</p>
+                <button class="build-generate-button" id="build-generate-button" type="submit">Generate proposal</button>
+                <button class="build-apply-button" id="build-apply-button" type="button" disabled>Apply to file</button>
+              </div>
+            </form>
+            <p class="build-safety-note">The selected file and request go to your configured AI provider. Only allowlisted files are available; changes need your approval and no shell commands run.</p>
+          </section>
         </section>
 
         <aside class="side-rail" aria-label="Assistant status and commands">

@@ -21,11 +21,25 @@ A modular AI assistant interface inspired by JARVIS.
 
 The app sends recent chat context to Ollama on your machine. It does not need an API key. If Ollama is unavailable, JARVIS falls back to local commands and displays a warning. To use OpenAI instead, set `AI_PROVIDER=openai` and `OPENAI_API_KEY` in `.env`; `AI_PROVIDER=local` disables hosted/local LLM calls.
 
+## LocalAI
+JARVIS can use a LocalAI server through its OpenAI-compatible chat API. Start LocalAI, install a model there, then set these values in `.env` (replace the model with the name shown by your LocalAI instance):
+
+```dotenv
+AI_PROVIDER=localai
+LOCALAI_BASE_URL=http://127.0.0.1:8080/v1
+LOCALAI_MODEL=your-installed-model-name
+# Set this only if LocalAI API key authentication is enabled.
+LOCALAI_API_KEY=
+```
+
+Restart JARVIS after changing `.env`. Chat and Build mode use the same configured LocalAI model. JARVIS does not install or manage LocalAI models; follow the [LocalAI quickstart](https://localai.io/basics/getting_started/) to run the server and add a model.
+
 ## Features
 - Web chat interface
 - Browser voice input and speech output (browser/device support required)
 - Local command parser (greeting, local or worldwide time by city/time zone, date, joke, calculation, unit conversion, open sites, web search)
-- Local Ollama or OpenAI backend via `/api/chat`
+- Local Ollama, LocalAI, or OpenAI backend via `/api/chat`
+- In-app Build workspace for reviewing and approving single-file AI proposals; selected file contents are sent to the configured AI provider, and shell commands are not executed
 - Live host CPU utilization and GPU utilization when supported GPU metrics tools are installed (`nvidia-smi` or AMD `rocm-smi`); readings are served by the local Node server
 - Chat history in localStorage
 - Approximate-location weather from the public Open-Meteo service (requires location permission and internet)

@@ -1,6 +1,15 @@
 const chat = document.getElementById("chat");
 const composer = document.getElementById("composer");
 const input = document.getElementById("input");
+const chatWorkspace = document.getElementById("chat-workspace");
+const buildWorkspace = document.getElementById("build-workspace");
+const buildFileSelect = document.getElementById("build-file-select");
+const buildSource = document.getElementById("build-source");
+const buildProposal = document.getElementById("build-proposal");
+const buildRequest = document.getElementById("build-request");
+const buildStatus = document.getElementById("build-status");
+const buildGenerateButton = document.getElementById("build-generate-button");
+const buildApplyButton = document.getElementById("build-apply-button");
 const coreVisual = document.getElementById("core-visual");
 const coreCaption = document.getElementById("core-caption");
 const coreState = document.getElementById("core-state");
@@ -53,6 +62,9 @@ let speechPending = false;
 let voiceRestartTimer;
 let voiceModeInputFailed = false;
 let isUpdatingSystemMetrics = false;
+let buildFilePath = "";
+let buildBaseHash = "";
+let buildFilesLoaded = false;
 const profileState = loadProfiles();
 let profiles = profileState.profiles;
 let activeProfileId = profileState.activeProfileId;
@@ -2295,6 +2307,133 @@ composer.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage(input.value);
   input.focus();
+});
+
+async function requestBuildApi(url, options) {
+  const response = await fetch(url, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || `Build request failed (HTTP ${response.status}).`);
+  return data;
+}
+
+async function loadBuildFile(filePath) {
+  if (!filePath) return;
+  buildFilePath = filePath;
+  buildBaseHash = "";
+  buildProposal.value = "";
+  buildApplyButton.disabled = true;
+  buildStatus.textContent = `Loading ${filePath}…`;
+  try {
+    const data = await requestBuildApi(`/api/build/file?${new URLSearchParams({ path: filePath })}`);
+    buildSource.value = data.content;
+    buildFilePath = data.path;
+    buildBaseHash = data.hash;
+    buildStatus.textContent = `Loaded ${data.path}. Describe one change to propose.`;
+  } catch (error) {
+    buildSource.value = "";
+    buildStatus.textContent = error.message;
+  }
+}
+
+async function loadBuildFiles() {
+  buildStatus.textContent = "Loading project files…";
+  buildFileSelect.disabled = true;
+  try {
+    const data = await requestBuildApi("/api/build/files");
+    buildFileSelect.replaceChildren();
+    data.files.forEach((file) => {
+      const option = document.createElement("option");
+      option.value = file.path;
+      option.textContent = file.path;
+      buildFileSelect.appendChild(option);
+    });
+    buildFileSelect.disabled = data.files.length === 0;
+    buildFilesLoaded = true;
+    if (!data.files.length) {
+      buildStatus.textContent = "No supported project files were found.";
+      return;
+    }
+    await loadBuildFile(data.files[0].path);
+    if (data.provider === "local") {
+      buildStatus.textContent = "Project files loaded. Set AI_PROVIDER to ollama or openai to generate proposals.";
+    }
+  } catch (error) {
+    buildStatus.textContent = error.message;
+  }
+}
+
+function setWorkspaceMode(mode) {
+  const isBuildMode = mode === "build";
+  chatWorkspace.hidden = isBuildMode;
+  buildWorkspace.hidden = !isBuildMode;
+  document.getElementById("chat-mode-button").setAttribute("aria-selected", String(!isBuildMode));
+  document.getElementById("build-mode-button").setAttribute("aria-selected", String(isBuildMode));
+  document.getElementById("chat-mode-button").classList.toggle("is-selected", !isBuildMode);
+  document.getElementById("build-mode-button").classList.toggle("is-selected", isBuildMode);
+  document.getElementById("clear-button").hidden = isBuildMode;
+  document.querySelector("#conversation-title").textContent = isBuildMode
+    ? "Build with JARVIS."
+    : "Your assistant, at the ready.";
+  document.querySelector(".conversation .eyebrow").textContent = isBuildMode ? "PROJECT WORKSPACE" : "VOICE & COMMAND";
+  if (isBuildMode && !buildFilesLoaded) loadBuildFiles();
+  if (isBuildMode) buildRequest.focus();
+}
+
+document.getElementById("chat-mode-button").addEventListener("click", () => setWorkspaceMode("chat"));
+document.getElementById("build-mode-button").addEventListener("click", () => setWorkspaceMode("build"));
+buildFileSelect.addEventListener("change", () => loadBuildFile(buildFileSelect.value));
+document.getElementById("build-reload-button").addEventListener("click", () => loadBuildFile(buildFilePath));
+
+document.getElementById("build-prompt-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const prompt = buildRequest.value.trim();
+  if (!buildFilePath || !prompt) {
+    buildStatus.textContent = "Choose a file and describe the change you want.";
+    return;
+  }
+
+  buildGenerateButton.disabled = true;
+  buildApplyButton.disabled = true;
+  buildStatus.textContent = "Generating a proposal…";
+  try {
+    const data = await requestBuildApi("/api/build/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: buildFilePath, prompt })
+    });
+    buildProposal.value = data.proposal;
+    buildBaseHash = data.baseHash;
+    buildStatus.textContent = `Proposal from ${data.provider}. Review it before applying.`;
+    buildApplyButton.disabled = !data.proposal.trim();
+  } catch (error) {
+    buildStatus.textContent = error.message;
+  } finally {
+    buildGenerateButton.disabled = false;
+  }
+});
+
+buildProposal.addEventListener("input", () => {
+  buildApplyButton.disabled = !buildBaseHash || !buildProposal.value.trim();
+});
+
+buildApplyButton.addEventListener("click", async () => {
+  if (!buildFilePath || !buildBaseHash || !buildProposal.value.trim()) return;
+  if (!window.confirm(`Replace ${buildFilePath} with the proposed contents?`)) return;
+
+  buildApplyButton.disabled = true;
+  buildStatus.textContent = `Applying ${buildFilePath}…`;
+  try {
+    await requestBuildApi("/api/build/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: buildFilePath, content: buildProposal.value, expectedHash: buildBaseHash })
+    });
+    await loadBuildFile(buildFilePath);
+    buildStatus.textContent = `Applied changes to ${buildFilePath}.`;
+  } catch (error) {
+    buildStatus.textContent = error.message;
+    buildApplyButton.disabled = false;
+  }
 });
 
 document.getElementById("clear-button").addEventListener("click", () => {
