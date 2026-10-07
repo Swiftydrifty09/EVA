@@ -7,6 +7,7 @@ const { promisify } = require("util");
 const express = require("express");
 const dotenv = require("dotenv");
 const OpenAI = require("openai");
+const { tools, runTool } = require("./tools");
 
 const execFileAsync = promisify(execFile);
 const rootDir = path.resolve(__dirname, "..");
@@ -252,7 +253,7 @@ function generateLocalReply(message) {
   return "I am running without an AI service, so I cannot answer open-ended questions yet. I can tell the time or date, calculate expressions, tell a joke, and open or search the web. Say 'help' for examples.";
 }
 
-const systemPrompt = "You are JARVIS, a concise, capable personal assistant. Keep answers direct and helpful.";
+const systemPrompt = "You are JARVIS, a concise, capable personal assistant. Keep answers direct and helpful. You may use the provided read-only tools to answer questions about current time or the computer running JARVIS. Use a tool when live data is needed, never claim a tool succeeded if it returned an error, and do not claim to have used tools that were not provided.";
 const personalityInstructions = {
   balanced: "Use a balanced, clear, helpful tone.",
   concise: "Be especially concise and lead with the answer.",
@@ -260,7 +261,15 @@ const personalityInstructions = {
   formal: "Use a polished, professional tone."
 };
 
-function getConversationMessages(history, message, personality = "balanced") {
+const skillInstructions = {
+  general: "Answer as a capable general-purpose assistant.",
+  research: "Act as a careful research analyst. Separate established facts from uncertainty, identify claims that need verification, and never invent citations or imply you searched the web. If the supplied context is insufficient, say what sources or information are needed.",
+  coding: "Act as a pragmatic code assistant. Give precise, minimal solutions, explain important tradeoffs, and include relevant tests when useful. Do not claim to have run code or inspected files that were not provided.",
+  tutoring: "Act as a supportive tutor. Explain concepts in clear steps, adapt to the learner's question, and use a small example when helpful. Encourage understanding rather than only giving an answer.",
+  writing: "Act as a thoughtful writing coach. Preserve the user's intent and voice, improve clarity and structure, and provide a polished draft when requested."
+};
+
+function getConversationMessages(history, message, personality = "balanced", skill = "general") {
   const messages = Array.isArray(history)
     ? history
         .filter((item) => item && ["user", "assistant"].includes(item.role) && typeof item.content === "string")
@@ -275,23 +284,106 @@ function getConversationMessages(history, message, personality = "balanced") {
   }
 
   const styleInstruction = personalityInstructions[personality] || personalityInstructions.balanced;
-  return [{ role: "system", content: `${systemPrompt} ${styleInstruction}` }, ...messages];
+  const skillInstruction = skillInstructions[skill] || skillInstructions.general;
+  return [{ role: "system", content: `${systemPrompt} ${styleInstruction} ${skillInstruction}` }, ...messages];
 }
 
-async function askOpenAICompatible(messages, { apiKey, baseURL, model }) {
+async function askOpenAICompatible(messages, { apiKey, baseURL, model }, signal) {
   const client = new OpenAI({ apiKey, baseURL });
-  const completion = await client.chat.completions.create({
-    model,
-    temperature: 0.7,
-    messages
-  });
+  let toolCallCount = 0;
+  const toolsUsed = [];
 
-  const reply = completion.choices?.[0]?.message?.content?.trim();
-  if (!reply) throw new Error("The OpenAI-compatible provider returned an empty response.");
-  return reply;
+  for (let round = 0; round <= 3; round += 1) {
+    let completion;
+    try {
+      completion = await client.chat.completions.create({
+        model,
+        temperature: 0.7,
+        messages,
+        tools
+      }, { signal });
+    } catch (error) {
+      if (round !== 0 || toolCallCount !== 0 || !isToolCallingUnsupported(error)) throw error;
+      completion = await client.chat.completions.create({
+        model,
+        temperature: 0.7,
+        messages
+      }, { signal });
+    }
+    const assistantMessage = completion.choices?.[0]?.message;
+    if (!assistantMessage) throw new Error("The OpenAI-compatible provider returned an empty response.");
+
+    const toolCalls = assistantMessage.tool_calls || [];
+    if (!toolCalls.length) {
+      const reply = assistantMessage.content?.trim();
+      if (!reply) throw new Error("The OpenAI-compatible provider returned an empty response.");
+      return { reply, toolsUsed };
+    }
+    if (round === 3) throw new Error("The assistant exceeded the tool-call limit without producing a final answer.");
+
+    messages.push(assistantMessage);
+    for (const toolCall of toolCalls) {
+      const name = toolCall.function?.name;
+      toolCallCount += 1;
+      const result = toolCallCount <= 4
+        ? await executeToolCall(name, parseToolArguments(toolCall.function?.arguments), {
+            getSystemStatus: getCurrentSystemStatus
+          })
+        : { error: "The request exceeded the maximum of four tool calls." };
+      if (toolCallCount <= 4 && typeof name === "string") toolsUsed.push(name);
+      messages.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(result)
+      });
+    }
+    if (toolCallCount > 4) {
+      throw new Error("The assistant exceeded the maximum of four tool calls.");
+    }
+  }
+
+  throw new Error("The assistant could not complete the tool request.");
 }
 
-async function askOpenAI(messages) {
+function isToolCallingUnsupported(error) {
+  const status = error?.status || error?.statusCode;
+  return status === 400 && /\btools?\b|\bfunctions?\b/i.test(error?.message || "");
+}
+
+function parseToolArguments(rawArguments) {
+  if (typeof rawArguments === "string") {
+    try {
+      return JSON.parse(rawArguments);
+    } catch (error) {
+      return { __parseError: `Tool arguments were not valid JSON: ${error.message}` };
+    }
+  }
+  return rawArguments;
+}
+
+async function executeToolCall(name, args, context) {
+  if (args && typeof args === "object" && args.__parseError) {
+    console.error(`Tool ${name || "unknown"} failed:`, args.__parseError);
+    return { error: args.__parseError };
+  }
+
+  try {
+    return await runTool(name, args, context);
+  } catch (error) {
+    console.error(`Tool ${name || "unknown"} failed:`, error.message);
+    return { error: error.message };
+  }
+}
+
+async function getCurrentSystemStatus() {
+  return {
+    cpu: getCpuUsage(),
+    gpu: await getGpuUsage(),
+    sampledAt: new Date().toISOString()
+  };
+}
+
+async function askOpenAI(messages, signal) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is required when AI_PROVIDER=openai.");
@@ -300,10 +392,10 @@ async function askOpenAI(messages) {
   return askOpenAICompatible(messages, {
     apiKey,
     model: process.env.OPENAI_MODEL || "gpt-4o-mini"
-  });
+  }, signal);
 }
 
-async function askLocalAI(messages) {
+async function askLocalAI(messages, signal) {
   const model = process.env.LOCALAI_MODEL;
   if (!model) {
     throw new Error("Set LOCALAI_MODEL to a model installed in LocalAI.");
@@ -313,31 +405,92 @@ async function askLocalAI(messages) {
     apiKey: process.env.LOCALAI_API_KEY || "localai",
     baseURL: process.env.LOCALAI_BASE_URL || "http://127.0.0.1:8080/v1",
     model
-  });
+  }, signal);
 }
 
-async function askOllama(messages) {
-  const response = await fetch(process.env.OLLAMA_URL || "http://127.0.0.1:11434/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: process.env.OLLAMA_MODEL || "jarvis-tech/Jarvis_Distilled_v1:latest",
-      messages,
-      stream: false
-    }),
-    signal: AbortSignal.timeout(120_000)
-  });
+async function askOllama(messages, signal) {
+  let toolCallCount = 0;
+  const toolsUsed = [];
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
+    : AbortSignal.timeout(120_000);
 
-  if (!response.ok) {
-    throw new Error(`Ollama returned HTTP ${response.status}. Check that Ollama is running and the model is installed.`);
+  for (let round = 0; round <= 3; round += 1) {
+    const response = await fetch(process.env.OLLAMA_URL || "http://127.0.0.1:11434/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: process.env.OLLAMA_MODEL || "jarvis-tech/Jarvis_Distilled_v1:latest",
+        messages,
+        tools,
+        stream: false
+      }),
+      signal: requestSignal
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      if (
+        round === 0 &&
+        toolCallCount === 0 &&
+        response.status === 400 &&
+        /\btools?\b|\bfunctions?\b/i.test(errorBody)
+      ) {
+        const fallbackResponse = await fetch(process.env.OLLAMA_URL || "http://127.0.0.1:11434/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: process.env.OLLAMA_MODEL || "jarvis-tech/Jarvis_Distilled_v1:latest",
+            messages,
+            stream: false
+          }),
+          signal: requestSignal
+        });
+        if (!fallbackResponse.ok) {
+          throw new Error(`Ollama returned HTTP ${fallbackResponse.status} after retrying without tool support.`);
+        }
+        const fallbackResult = await fallbackResponse.json();
+        const fallbackReply = fallbackResult.message?.content?.trim();
+        if (!fallbackReply) throw new Error("Ollama returned an empty response after retrying without tool support.");
+        return { reply: fallbackReply, toolsUsed };
+      }
+      throw new Error(`Ollama returned HTTP ${response.status}. Check that Ollama is running and the model is installed.`);
+    }
+
+    const result = await response.json();
+    const assistantMessage = result.message;
+    if (!assistantMessage) throw new Error("Ollama returned an empty response.");
+
+    const toolCalls = assistantMessage.tool_calls || [];
+    if (!toolCalls.length) {
+      const reply = assistantMessage.content?.trim();
+      if (!reply) throw new Error("Ollama returned an empty response.");
+      return { reply, toolsUsed };
+    }
+    if (round === 3) throw new Error("The assistant exceeded the tool-call limit without producing a final answer.");
+
+    messages.push({
+      role: "assistant",
+      content: assistantMessage.content || "",
+      tool_calls: toolCalls
+    });
+    for (const toolCall of toolCalls) {
+      const name = toolCall.function?.name;
+      toolCallCount += 1;
+      const result = toolCallCount <= 4
+        ? await executeToolCall(name, toolCall.function?.arguments, {
+            getSystemStatus: getCurrentSystemStatus
+          })
+        : { error: "The request exceeded the maximum of four tool calls." };
+      if (toolCallCount <= 4 && typeof name === "string") toolsUsed.push(name);
+      messages.push({ role: "tool", content: JSON.stringify(result) });
+    }
+    if (toolCallCount > 4) {
+      throw new Error("The assistant exceeded the maximum of four tool calls.");
+    }
   }
 
-  const result = await response.json();
-  const reply = result.message?.content?.trim();
-  if (!reply) {
-    throw new Error("Ollama returned an empty response.");
-  }
-  return reply;
+  throw new Error("The assistant could not complete the tool request.");
 }
 
 const buildAllowedDirectories = new Set(["controllers", "core", "public", "routes", "services"]);
@@ -592,6 +745,11 @@ app.get("/api/map/search", async (req, res) => {
 });
 
 app.post("/api/chat", async (req, res) => {
+  const controller = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
+
   const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
 
   if (!message) {
@@ -601,28 +759,36 @@ app.post("/api/chat", async (req, res) => {
   const personality = ["balanced", "concise", "friendly", "formal"].includes(req.body?.personality)
     ? req.body.personality
     : "balanced";
-  const messages = getConversationMessages(req.body?.history, message, personality);
+  const skill = ["general", "research", "coding", "tutoring", "writing"].includes(req.body?.skill)
+    ? req.body.skill
+    : "general";
+  const messages = getConversationMessages(req.body?.history, message, personality, skill);
   const provider = process.env.AI_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "local");
 
   try {
-    let reply;
+    let result;
     if (provider === "ollama") {
-      reply = await askOllama(messages);
+      result = await askOllama(messages, controller.signal);
     } else if (provider === "openai") {
-      reply = await askOpenAI(messages);
+      result = await askOpenAI(messages, controller.signal);
     } else if (provider === "localai") {
-      reply = await askLocalAI(messages);
+      result = await askLocalAI(messages, controller.signal);
     } else if (provider === "local") {
-      reply = generateLocalReply(message);
+      result = { reply: generateLocalReply(message), toolsUsed: [] };
     } else {
       throw new Error(`Unsupported AI_PROVIDER: ${provider}. Use ollama, localai, openai, or local.`);
     }
 
-    if (!reply) {
+    if (!result.reply) {
       throw new Error(`${provider} returned an empty response.`);
     }
-    res.json({ reply, provider });
+    res.json({
+      reply: result.reply,
+      provider,
+      ...(result.toolsUsed.length ? { toolsUsed: result.toolsUsed } : {})
+    });
   } catch (error) {
+    if (controller.signal.aborted) return;
     console.error(`${provider} error:`, error.message);
     res.json({
       reply: generateLocalReply(message),

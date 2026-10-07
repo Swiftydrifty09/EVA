@@ -16,6 +16,8 @@ const coreState = document.getElementById("core-state");
 const voiceButton = document.getElementById("voice-button");
 const voiceModeEnter = document.getElementById("voice-mode-enter");
 const voiceModeExit = document.getElementById("voice-mode-exit");
+const chatStopButton = document.getElementById("chat-stop-button");
+const systemBootButton = document.getElementById("system-boot-button");
 const appShell = document.querySelector(".app-shell");
 const voiceStatus = document.getElementById("voice-status");
 const toolStatus = document.getElementById("tool-status");
@@ -62,6 +64,8 @@ let speechPending = false;
 let voiceRestartTimer;
 let voiceModeInputFailed = false;
 let isUpdatingSystemMetrics = false;
+let activeChatController;
+let bootSequenceTimers = [];
 let buildFilePath = "";
 let buildBaseHash = "";
 let buildFilesLoaded = false;
@@ -76,7 +80,8 @@ function loadLocalPreferences() {
     speechPitch: 1,
     speechMuted: false,
     theme: "blue",
-    personality: "balanced"
+    personality: "balanced",
+    skill: "general"
   };
   try {
     const saved = JSON.parse(localStorage.getItem(localPreferencesKey) || "null");
@@ -84,10 +89,15 @@ function loadLocalPreferences() {
       speechRate: Number.isFinite(saved?.speechRate) ? Math.min(1.6, Math.max(0.7, saved.speechRate)) : defaults.speechRate,
       speechPitch: Number.isFinite(saved?.speechPitch) ? Math.min(1.5, Math.max(0.5, saved.speechPitch)) : defaults.speechPitch,
       speechMuted: typeof saved?.speechMuted === "boolean" ? saved.speechMuted : defaults.speechMuted,
-      theme: ["blue", "arctic", "violet", "amber"].includes(saved?.theme) ? saved.theme : defaults.theme,
+      theme: ["blue", "arctic", "violet", "amber", "rose", "emerald", "crimson", "solar"].includes(saved?.theme)
+        ? saved.theme
+        : defaults.theme,
       personality: ["balanced", "concise", "friendly", "formal"].includes(saved?.personality)
         ? saved.personality
-        : defaults.personality
+        : defaults.personality,
+      skill: ["general", "research", "coding", "tutoring", "writing"].includes(saved?.skill)
+        ? saved.skill
+        : defaults.skill
     };
   } catch {
     return defaults;
@@ -108,6 +118,7 @@ function applyAppearancePreferences() {
   appShell.dataset.theme = localPreferences.theme;
   document.getElementById("theme-select").value = localPreferences.theme;
   document.getElementById("personality-select").value = localPreferences.personality;
+  document.getElementById("skill-select").value = localPreferences.skill;
 }
 
 function updateNetworkStatus() {
@@ -1914,6 +1925,7 @@ function exitVoiceOnlyMode() {
 
 function renderAssistantState() {
   const active = isProcessing || isSpeaking || isListening;
+  chatStopButton.hidden = !activeChatController && !isSpeaking && !speechPending;
   coreVisual.classList.toggle("is-active", active);
   coreVisual.classList.toggle("is-speaking", isSpeaking);
   coreVisual.closest(".core-panel").classList.toggle("is-active", active);
@@ -2076,7 +2088,7 @@ function getAliasedCommand(text) {
 
 async function sendMessage(message) {
   const text = message.trim();
-  if (!text) return;
+  if (!text || isProcessing) return;
 
   sessionCommandCount += 1;
   updateLocalDiagnostics();
@@ -2190,14 +2202,19 @@ async function sendMessage(message) {
     return;
   }
 
+  const controller = new AbortController();
+  activeChatController = controller;
+  chatStopButton.hidden = false;
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         message: commandText,
         history: getConversationHistory(),
-        personality: localPreferences.personality
+        personality: localPreferences.personality,
+        skill: localPreferences.skill
       })
     });
 
@@ -2207,16 +2224,85 @@ async function sendMessage(message) {
     }
     const reply = data.reply || getReply(text);
     addMessage(reply, "assistant");
+    if (Array.isArray(data.toolsUsed) && data.toolsUsed.length) {
+      const toolLabels = {
+        get_current_time: "Current time",
+        get_system_status: "Device status"
+      };
+      const usedTools = [...new Set(data.toolsUsed)]
+        .map((name) => toolLabels[name] || "Read-only assistant tool");
+      addToolCard("AI TOOLS USED", usedTools.join(" · "));
+    }
     if (data.warning) addMessage(data.warning, "assistant");
     speak(reply);
     setActive(false);
   } catch (error) {
+    if (controller.signal.aborted) {
+      addToolCard("RESPONSE STOPPED", "JARVIS stopped the active response.");
+      setActive(false);
+      return;
+    }
     const fallback = getReply(text);
     addMessage(fallback, "assistant");
     addMessage(`Assistant connection failed; using local commands instead. ${error.message}`, "assistant");
     speak(fallback);
     setActive(false);
+  } finally {
+    if (activeChatController === controller) {
+      activeChatController = undefined;
+      renderAssistantState();
+    }
   }
+}
+
+function stopChatResponse() {
+  if (activeChatController) {
+    activeChatController.abort();
+    return;
+  }
+  if (speechPending && "speechSynthesis" in window) {
+    ++speechSequence;
+    window.speechSynthesis.cancel();
+    speechPending = false;
+    isSpeaking = false;
+    renderAssistantState();
+    toolStatus.textContent = "Speech response stopped.";
+    scheduleVoiceListening();
+  }
+}
+
+function stopSystemBootSequence() {
+  bootSequenceTimers.forEach(clearTimeout);
+  bootSequenceTimers = [];
+  coreVisual.classList.remove("is-booting");
+  systemBootButton.disabled = false;
+}
+
+function runSystemBootSequence() {
+  if (isProcessing || isSpeaking || isListening) return;
+  stopSystemBootSequence();
+  systemBootButton.disabled = true;
+  coreVisual.classList.add("is-booting");
+  const stages = [
+    ["POWERING UP HUD", "STARTING"],
+    ["CALIBRATING CORE", "CALIBRATING"],
+    ["SYNCING INTERFACE", "ONLINE"],
+    ["READY FOR COMMANDS", "STANDBY"]
+  ];
+
+  stages.forEach(([caption, state], index) => {
+    const timer = setTimeout(() => {
+      if (isProcessing || isSpeaking || isListening) {
+        stopSystemBootSequence();
+        renderAssistantState();
+        return;
+      }
+      coreCaption.textContent = caption;
+      coreState.textContent = state;
+      if (index === stages.length - 1) stopSystemBootSequence();
+    }, index * 500);
+    bootSequenceTimers.push(timer);
+  });
 }
 
 function updateClock() {
@@ -2308,6 +2394,8 @@ composer.addEventListener("submit", (event) => {
   sendMessage(input.value);
   input.focus();
 });
+chatStopButton.addEventListener("click", stopChatResponse);
+systemBootButton.addEventListener("click", runSystemBootSequence);
 
 async function requestBuildApi(url, options) {
   const response = await fetch(url, options);
@@ -2598,6 +2686,12 @@ document.getElementById("personality-select").addEventListener("change", (event)
   localPreferences.personality = event.currentTarget.value;
   if (saveLocalPreferences()) {
     toolStatus.textContent = `Saved ${event.currentTarget.selectedOptions[0].textContent} assistant response style in this browser.`;
+  }
+});
+document.getElementById("skill-select").addEventListener("change", (event) => {
+  localPreferences.skill = event.currentTarget.value;
+  if (saveLocalPreferences()) {
+    toolStatus.textContent = `Saved ${event.currentTarget.selectedOptions[0].textContent} AI skill in this browser.`;
   }
 });
 document.getElementById("mic-reactive-toggle").addEventListener("change", (event) => {

@@ -37,8 +37,11 @@ Restart JARVIS after changing `.env`. Chat and Build mode use the same configure
 ## Features
 - Web chat interface
 - Browser voice input and speech output (browser/device support required)
+- Interrupt active AI requests with Stop; cancellation is passed through to supported providers, and in-progress browser speech can also be stopped
+- Optional, non-blocking cinematic boot sequence; respects the browser's reduced-motion preference
 - Local command parser (greeting, local or worldwide time by city/time zone, date, joke, calculation, unit conversion, open sites, web search)
 - Local Ollama, LocalAI, or OpenAI backend via `/api/chat`
+- AI tool routing for current time and read-only host CPU/GPU status; model tool calls are capped, and shell or file tools are not exposed to chat
 - In-app Build workspace for reviewing and approving single-file AI proposals; selected file contents are sent to the configured AI provider, and shell commands are not executed
 - Live host CPU utilization and GPU utilization when supported GPU metrics tools are installed (`nvidia-smi` or AMD `rocm-smi`); readings are served by the local Node server
 - Chat history in localStorage
@@ -59,8 +62,8 @@ Restart JARVIS after changing `.env`. Chat and Build mode use the same configure
 - Custom exact-phrase command aliases stored in this browser (for example, map “launch briefing” to “Brief me”)
 - Local diagnostics for browser speech support, connection state, host CPU/GPU readings, session uptime, command count, and browser storage usage
 - Local random number generation (`random number between 1 and 100`) and an expanded local help command
-- Locally saved HUD themes (deep blue, arctic cyan, violet, and amber)
-- Assistant response styles (balanced, concise, friendly, and formal) are sent as a fixed allowlisted preference with chat requests; local commands remain on-device
+- Locally saved HUD themes (deep blue, arctic cyan, violet, amber, rose, emerald, crimson, and solar gold)
+- Assistant response styles (balanced, concise, friendly, and formal) and AI skills (general, research analyst, code assistant, tutor, and writing coach) are sent as fixed allowlisted preferences with chat requests and saved in this browser. Skills guide responses but do not grant additional tool access; chat models can call only the listed read-only server tools. Requests and any tool results go to the configured AI provider; on-device commands remain in this browser
 - Optional microphone-reactive core visualizer; microphone access is requested only when enabled, audio is analyzed in-browser, and capture stops when disabled or voice mode exits
 - Network status indicator distinguishes offline local tools from features that need internet access
 - Keyboard shortcuts: `Ctrl+K` focuses chat, `Escape` closes the assistant menu, and `Ctrl+Shift+V` activates full-screen voice mode

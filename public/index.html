@@ -26,6 +26,7 @@
           <span id="network-status" role="status">CHECKING NETWORK</span>
         </div>
         <button class="voice-mode-exit" id="voice-mode-exit" type="button">EXIT VOICE MODE</button>
+        <button class="chat-stop-button" id="chat-stop-button" type="button" hidden>STOP RESPONSE</button>
       </header>
 
       <main class="workspace">
@@ -42,6 +43,7 @@
           </div>
           <div class="waveform" id="waveform" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
           <p class="core-caption" id="core-caption">SYSTEM READY</p>
+          <button class="system-boot-button" id="system-boot-button" type="button">PLAY BOOT SEQUENCE</button>
           <button class="voice-mode-enter" id="voice-mode-enter" type="button">FULL-SCREEN VOICE MODE</button>
         </section>
 
@@ -192,6 +194,10 @@
                 <option value="arctic">Arctic cyan</option>
                 <option value="violet">Violet</option>
                 <option value="amber">Amber</option>
+                <option value="rose">Rose</option>
+                <option value="emerald">Emerald</option>
+                <option value="crimson">Crimson</option>
+                <option value="solar">Solar gold</option>
               </select>
               <label for="personality-select">ASSISTANT STYLE</label>
               <select id="personality-select">
@@ -200,7 +206,15 @@
                 <option value="friendly">Friendly</option>
                 <option value="formal">Formal</option>
               </select>
-              <p>Response style affects Ollama or OpenAI chat. On-device commands stay in this browser.</p>
+              <label for="skill-select">AI SKILL</label>
+              <select id="skill-select">
+                <option value="general">General assistant</option>
+                <option value="research">Research analyst</option>
+                <option value="coding">Code assistant</option>
+                <option value="tutoring">Tutor</option>
+                <option value="writing">Writing coach</option>
+              </select>
+              <p>Style and skill guide Ollama or OpenAI chat. Skills do not add tools; on-device commands stay in this browser.</p>
             </section>
             <section class="microphone-settings" aria-label="Microphone visual effects">
               <label>
