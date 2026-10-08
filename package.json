@@ -4,7 +4,8 @@
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node services/server.js"
+    "start": "node services/server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "body": "^5.1.0",

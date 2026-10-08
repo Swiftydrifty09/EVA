@@ -1219,12 +1219,20 @@ body::after {
 .timer-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 7px 9px;
   border: 1px solid rgba(86, 226, 255, 0.14);
   color: #c8e6ef;
   font-size: 11px;
+}
+.timer-label { min-width: 0; flex: 1 1 130px; overflow-wrap: anywhere; }
+.timer-remaining {
+  color: #9feeff;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .timer-cancel {
   display: grid;
@@ -1296,6 +1304,75 @@ body::after {
   text-transform: uppercase;
 }
 .profile-add-button:hover { border-color: rgba(86, 226, 255, 0.58); }
+.profile-backup-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.profile-backup-controls .voice-test-button { flex: 1 1 auto; }
+.local-data-filter {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(93, 210, 242, 0.18);
+  background: #0a1722;
+  color: #d5edf5;
+  font: inherit;
+  font-size: 11px;
+}
+.local-data-list {
+  display: grid;
+  max-height: 330px;
+  gap: 6px;
+  overflow: auto;
+  padding-right: 2px;
+}
+.local-data-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid rgba(93, 210, 242, 0.13);
+  background: rgba(4, 15, 25, 0.5);
+}
+.local-data-content { display: grid; min-width: 0; gap: 3px; }
+.local-data-type {
+  color: #83a9c8;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+.local-data-title {
+  display: block;
+  max-height: 100px;
+  overflow: auto;
+  color: #cfe3f5;
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.local-data-actions { display: flex; flex: 0 0 auto; gap: 3px; }
+.local-data-actions button {
+  min-height: 26px;
+  padding: 3px 6px;
+  border: 1px solid rgba(86, 226, 255, 0.2);
+  background: transparent;
+  color: #9feeff;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+.local-data-actions button:last-child { color: #ffb66e; }
+.local-data-empty,
+.local-data-privacy {
+  margin: 0;
+  color: #7898a6;
+  font-size: 10px;
+  line-height: 1.5;
+}
 .map-search-form {
   display: flex;
   flex-wrap: wrap;

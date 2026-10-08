@@ -14,6 +14,8 @@ A modular, local-first virtual intelligence and assistant.
 2. Start the app: `npm start`
 3. Open the forwarded port printed by the server (default is `3000`, or the value in `PORT` if you override it).
 
+The server binds to `127.0.0.1` by default and rejects non-local Host headers. To make it reachable through a remote development environment's port forward, set `HOST=0.0.0.0` in your ignored `.env` file. This explicitly exposes EVA and its coding endpoints to anyone who can reach that forwarded port; use only a private, trusted environment. Never store real credentials in tracked files.
+
 ## Local AI with Ollama
 1. Install Ollama and download the model: `ollama pull jarvis-tech/Jarvis_Distilled_v1:latest`
 2. Copy `.env.example` to `.env` and adjust `OLLAMA_MODEL` if needed.
@@ -50,16 +52,16 @@ Restart EVA after changing `.env`. Chat and Build mode use the same configured L
 - U.S. and world headlines aggregated from Google News, NPR, BBC News, and The Guardian public RSS feeds (requires internet)
 - On-device quick scans for selected text files under 1 MB; file content is not uploaded
 - Permission-based screen capture preview; screenshots stay in the browser and are not interpreted or uploaded
-- Local timers and reminders (`set a timer for 5 minutes`, `remind me to stretch in 10 seconds`); timer delivery requires the app tab to remain open
+- Local timers and reminders (`set a timer for 5 minutes`, `remind me to stretch in 10 seconds`) with a live remaining-time display; timer delivery requires the app tab to remain open
 - Offline unit conversions for length, mass, volume, and temperature (for example, `convert 5 miles to km`)
 - Installable offline app shell; open EVA once while online, then install it from the browser's app/install menu. Chat, live news, weather, and map lookups still need their respective server or internet access.
-- Multiple local profiles with separate names, spoken voices, remembered facts, tasks, and notes stored in browser localStorage; profile changes sync across open tabs of the same origin. These commands work without an API key and are not sent to the AI server
+- Multiple local profiles with separate names, spoken voices, remembered facts, tasks, and notes stored in browser localStorage; profile changes sync across open tabs of the same origin. Review, filter, complete, reopen, or delete saved items in Agent Tools; export/import a profile JSON backup or explicitly clear/delete profile data. These commands work without an API key and are not sent to the AI server
 - On-device daily briefing (`brief me`, `what should I focus on today`) summarizes local time, overdue and upcoming tasks, active timers, and saved-memory counts without making API requests
 - On-device search across saved profile facts, notes, and tasks (for example, `what did I save about the trip?`) plus date-based task reminders (for example, `remind me tomorrow to call Sam`); searches and reminders stay in local browser storage and make no API requests
 - Voice shortcuts include “repeat that” and “stop listening” in full-screen voice mode
 - Browser speech can use any voice installed in the browser, with a separately saved voice selection for each local profile; speech speed, pitch, and mute controls are stored locally
 - The default spoken voice prefers a feminine-sounding English browser voice when available; users can choose another installed voice per profile
-- Local stopwatch controls in Agent Tools, plus voice/text commands to start, stop, and reset it
+- Local stopwatch controls in Agent Tools, plus voice/text commands to start, stop, and reset it; elapsed/running state survives page reloads
 - Custom exact-phrase command aliases stored in this browser (for example, map “launch briefing” to “Brief me”)
 - Local diagnostics for browser speech support, connection state, host CPU/GPU readings, session uptime, command count, and browser storage usage
 - Local random number generation (`random number between 1 and 100`) and an expanded local help command
@@ -70,7 +72,7 @@ Restart EVA after changing `.env`. Chat and Build mode use the same configured L
 - Keyboard shortcuts: `Ctrl+K` focuses chat, `Escape` closes the assistant menu, and `Ctrl+Shift+V` activates full-screen voice mode
 - Browser speech includes voice preview and copy-last-reply clipboard action
 - Optional desktop notifications for timers, enabled only after an explicit user click
-- Cancel timers with `cancel timers`; timers are saved locally and restored on the next visit
+- Cancel timers with `cancel timers`; timers are saved locally and restored on the next visit. Remaining time updates while EVA is open and expired timers are checked when the tab becomes visible.
 
 ## Notes
 - Do not merge HTML, CSS, and JS into one file.
@@ -79,5 +81,6 @@ Restart EVA after changing `.env`. Chat and Build mode use the same configured L
 - Browser permission prompts govern microphone, location, and screen capture. The system monitor reads CPU counters from the host running the Node server; GPU utilization requires NVIDIA `nvidia-smi` or AMD `rocm-smi`. Hardware control, email, calendar, and OS-level automation are not connected.
 - Browser timers cannot run after the app is fully closed; desktop notifications are best effort and browser-dependent. Completed timers are detected when the page next runs.
 - The microphone visualizer needs browser microphone permission and Web Audio support. Browser speech recognition availability and offline behavior vary by browser; weather, news, maps, and web search require internet access.
+- Run `npm test` for the focused server and local-calculation regression tests.
 - Try “brief me”, “what did I save about the trip?”, “remind me tomorrow to call Sam”, “remember that I prefer concise answers”, “what do you remember?”, “create a task: review the release”, “list tasks”, “complete task 1”, “save a note: launch checklist”, and “read my last note”. Briefings, saved-data searches, and date-based reminders use local browser data only and make no API requests. The briefing does not infer priorities beyond highlighting due dates. Add profiles in Agent Tools, select a different voice for each, and switch profiles there or say “my name is …” to update the active profile name. Profile data is specific to this browser and can be cleared through its site-storage settings.
 - Ask “What time is it in Tokyo?” or use an IANA time zone such as “What time is it in America/Argentina/Buenos_Aires?”. World-clock answers use the browser’s built-in time-zone data and do not require an API key.

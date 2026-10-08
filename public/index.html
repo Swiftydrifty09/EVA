@@ -67,7 +67,7 @@
 
             <form class="composer" id="composer">
               <label class="visually-hidden" for="input">Message EVA</label>
-              <input id="input" name="message" autocomplete="off" placeholder="Ask for a briefing, search saved info, set a reminder..." />
+              <input id="input" name="message" maxlength="8000" autocomplete="off" placeholder="Ask for a briefing, search saved info, set a reminder..." />
               <button class="voice-button" id="voice-button" type="button" aria-label="Start voice input" title="Start voice input">VOICE</button>
               <button class="send-button" type="submit"><span>Send</span><span aria-hidden="true">&#8594;</span></button>
             </form>
@@ -143,7 +143,7 @@
 
           <section class="info-panel command-panel">
             <div class="panel-label"><span>QUICK COMMANDS</span><span class="panel-index">03</span></div>
-            <p class="command-guide-note">Local: time, calculate, convert, timers, stopwatch, tasks, notes, memory, random number, diagnostics.</p>
+            <p class="command-guide-note">Try “Help” for examples that work without an AI service or API key: time, math, timers, tasks, notes, memory, and more.</p>
             <button class="command-button" type="button" data-command="What time is it?">What time is it?<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Brief me">Brief me<span>&#8599;</span></button>
             <button class="command-button" type="button" data-command="Tell me a joke">Tell me a joke<span>&#8599;</span></button>
@@ -166,6 +166,17 @@
               </div>
               <button class="profile-add-button" id="profile-add" type="button">Add profile</button>
               <p id="memory-summary" aria-live="polite">0 saved items · stored only in this browser</p>
+              <div class="profile-backup-controls">
+                <button class="voice-test-button" id="profile-export" type="button">Export profile</button>
+                <button class="voice-test-button" id="profile-import" type="button">Import profile</button>
+                <button class="voice-test-button" id="profile-clear" type="button">Clear saved items</button>
+                <button class="voice-test-button" id="profile-delete" type="button">Delete profile</button>
+                <input class="visually-hidden" id="profile-import-input" type="file" accept="application/json,.json" />
+              </div>
+              <label for="local-data-filter">FIND SAVED ITEMS</label>
+              <input class="local-data-filter" id="local-data-filter" type="search" placeholder="Filter this profile" />
+              <div class="local-data-list" id="local-data-list" aria-live="polite"></div>
+              <p class="local-data-privacy">Profile backups stay on this device unless you choose where to save or open them.</p>
             </div>
             <button class="command-button" id="weather-button" type="button">Local weather<span>&#8599;</span></button>
             <button class="command-button" id="map-button" type="button">Open map<span>&#8599;</span></button>

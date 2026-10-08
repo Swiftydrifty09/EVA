@@ -17,7 +17,33 @@ if (fs.existsSync(envPath)) {
 }
 
 const app = express();
-app.use(express.json({ limit: "600kb" }));
+app.disable("x-powered-by");
+
+app.use((req, res, next) => {
+  res.set({
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://server.arcgisonline.com blob: data:; connect-src 'self' https://api.open-meteo.com; media-src 'self' blob: mediastream:; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(self), geolocation=(self), display-capture=(self)"
+  });
+  next();
+});
+
+app.use(express.json({ limit: "100kb" }));
+
+const configuredHost = process.env.HOST || "127.0.0.1";
+const isLoopbackHost = (host) => ["localhost", "127.0.0.1", "::1", "[::1]"].includes(host.toLowerCase());
+const restrictHostHeader = isLoopbackHost(configuredHost);
+
+app.use((req, res, next) => {
+  if (!restrictHostHeader) return next();
+  const hostname = req.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!isLoopbackHost(hostname)) {
+    return res.status(403).send("EVA only accepts local host requests by default.");
+  }
+  next();
+});
 
 function readCpuCounters() {
   const cores = os.cpus();
@@ -131,7 +157,6 @@ app.get("/main.js", (req, res) => {
 });
 
 app.use(express.static(path.join(rootDir, "public")));
-app.use(express.static(rootDir));
 
 app.get("/api/system", async (req, res) => {
   const cpu = getCpuUsage();
@@ -141,10 +166,13 @@ app.get("/api/system", async (req, res) => {
 });
 
 function parseCalculation(expression) {
+  if (typeof expression !== "string" || expression.length > 256) {
+    throw new Error("Calculations must be 256 characters or fewer");
+  }
   const sanitized = expression.replace(/\s+/g, "");
   const tokens = sanitized.match(/\d*\.?\d+|[()+\-*/%]/g);
 
-  if (!tokens || tokens.join("") !== sanitized) {
+  if (!tokens || tokens.length > 128 || tokens.join("") !== sanitized) {
     throw new Error("Invalid calculation");
   }
 
@@ -290,8 +318,12 @@ function getConversationMessages(history, message, personality = "balanced", ski
 
 async function askOpenAICompatible(messages, { apiKey, baseURL, model }, signal) {
   const client = new OpenAI({ apiKey, baseURL });
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
+    : AbortSignal.timeout(120_000);
   let toolCallCount = 0;
   const toolsUsed = [];
+  const toolCallResults = [];
 
   for (let round = 0; round <= 3; round += 1) {
     let completion;
@@ -301,14 +333,14 @@ async function askOpenAICompatible(messages, { apiKey, baseURL, model }, signal)
         temperature: 0.7,
         messages,
         tools
-      }, { signal });
+      }, { signal: requestSignal });
     } catch (error) {
       if (round !== 0 || toolCallCount !== 0 || !isToolCallingUnsupported(error)) throw error;
       completion = await client.chat.completions.create({
         model,
         temperature: 0.7,
         messages
-      }, { signal });
+      }, { signal: requestSignal });
     }
     const assistantMessage = completion.choices?.[0]?.message;
     if (!assistantMessage) throw new Error("The OpenAI-compatible provider returned an empty response.");
@@ -317,7 +349,7 @@ async function askOpenAICompatible(messages, { apiKey, baseURL, model }, signal)
     if (!toolCalls.length) {
       const reply = assistantMessage.content?.trim();
       if (!reply) throw new Error("The OpenAI-compatible provider returned an empty response.");
-      return { reply, toolsUsed };
+      return { reply, toolsUsed, toolCallResults };
     }
     if (round === 3) throw new Error("The assistant exceeded the tool-call limit without producing a final answer.");
 
@@ -330,7 +362,13 @@ async function askOpenAICompatible(messages, { apiKey, baseURL, model }, signal)
             getSystemStatus: getCurrentSystemStatus
           })
         : { error: "The request exceeded the maximum of four tool calls." };
-      if (toolCallCount <= 4 && typeof name === "string") toolsUsed.push(name);
+      if (toolCallCount <= 4 && typeof name === "string") {
+        toolsUsed.push(name);
+        toolCallResults.push({
+          name,
+          succeeded: typeof result === "object" && result !== null && !Object.hasOwn(result, "error")
+        });
+      }
       messages.push({
         role: "tool",
         tool_call_id: toolCall.id,
@@ -411,6 +449,7 @@ async function askLocalAI(messages, signal) {
 async function askOllama(messages, signal) {
   let toolCallCount = 0;
   const toolsUsed = [];
+  const toolCallResults = [];
   const requestSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
     : AbortSignal.timeout(120_000);
@@ -452,7 +491,7 @@ async function askOllama(messages, signal) {
         const fallbackResult = await fallbackResponse.json();
         const fallbackReply = fallbackResult.message?.content?.trim();
         if (!fallbackReply) throw new Error("Ollama returned an empty response after retrying without tool support.");
-        return { reply: fallbackReply, toolsUsed };
+        return { reply: fallbackReply, toolsUsed, toolCallResults };
       }
       throw new Error(`Ollama returned HTTP ${response.status}. Check that Ollama is running and the model is installed.`);
     }
@@ -465,7 +504,7 @@ async function askOllama(messages, signal) {
     if (!toolCalls.length) {
       const reply = assistantMessage.content?.trim();
       if (!reply) throw new Error("Ollama returned an empty response.");
-      return { reply, toolsUsed };
+      return { reply, toolsUsed, toolCallResults };
     }
     if (round === 3) throw new Error("The assistant exceeded the tool-call limit without producing a final answer.");
 
@@ -482,7 +521,13 @@ async function askOllama(messages, signal) {
             getSystemStatus: getCurrentSystemStatus
           })
         : { error: "The request exceeded the maximum of four tool calls." };
-      if (toolCallCount <= 4 && typeof name === "string") toolsUsed.push(name);
+      if (toolCallCount <= 4 && typeof name === "string") {
+        toolsUsed.push(name);
+        toolCallResults.push({
+          name,
+          succeeded: typeof result === "object" && result !== null && !Object.hasOwn(result, "error")
+        });
+      }
       messages.push({ role: "tool", content: JSON.stringify(result) });
     }
     if (toolCallCount > 4) {
@@ -578,11 +623,11 @@ function getConfiguredProvider() {
   return process.env.AI_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "local");
 }
 
-async function askConfiguredProvider(messages) {
+async function askConfiguredProvider(messages, signal) {
   const provider = getConfiguredProvider();
-  if (provider === "ollama") return { provider, reply: await askOllama(messages) };
-  if (provider === "openai") return { provider, reply: await askOpenAI(messages) };
-  if (provider === "localai") return { provider, reply: await askLocalAI(messages) };
+  if (provider === "ollama") return { provider, reply: await askOllama(messages, signal) };
+  if (provider === "openai") return { provider, reply: await askOpenAI(messages, signal) };
+  if (provider === "localai") return { provider, reply: await askLocalAI(messages, signal) };
   if (provider === "local") {
     throw new Error("Code generation needs AI_PROVIDER=ollama, openai, or localai.");
   }
@@ -612,6 +657,35 @@ function decodeXml(value) {
       }[code.toLowerCase()];
     })
     .trim();
+}
+
+async function readResponseTextLimited(response, limitBytes) {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > limitBytes) {
+    await response.body?.cancel();
+    throw new Error("The upstream response exceeded the size limit.");
+  }
+  if (!response.body) throw new Error("The upstream response body is unavailable.");
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > limitBytes) {
+        await reader.cancel();
+        throw new Error("The upstream response exceeded the size limit.");
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => {});
+    throw error;
+  }
+  return Buffer.concat(chunks, totalBytes).toString("utf8");
 }
 
 function readFeedItems(xml, feedName) {
@@ -653,7 +727,7 @@ app.get("/api/news", async (req, res) => {
         signal: AbortSignal.timeout(10_000)
       });
       if (!response.ok) throw new Error(`Feed returned HTTP ${response.status}.`);
-      const headlines = readFeedItems(await response.text(), feed.name)
+      const headlines = readFeedItems(await readResponseTextLimited(response, 2 * 1024 * 1024), feed.name)
         .map((headline) => ({ ...headline, region: feed.region }));
       return { name: feed.name, headlines };
     } catch (error) {
@@ -718,7 +792,7 @@ app.get("/api/map/search", async (req, res) => {
     });
     if (!response.ok) throw new Error(`Place search returned HTTP ${response.status}.`);
 
-    const results = await response.json();
+    const results = JSON.parse(await readResponseTextLimited(response, 128 * 1024));
     const result = Array.isArray(results) ? results[0] : null;
     const latitude = Number(result?.lat);
     const longitude = Number(result?.lon);
@@ -755,6 +829,9 @@ app.post("/api/chat", async (req, res) => {
   if (!message) {
     return res.status(400).json({ error: "Message is required." });
   }
+  if (message.length > 8000) {
+    return res.status(413).json({ error: "Messages must be 8,000 characters or fewer." });
+  }
 
   const personality = ["balanced", "concise", "friendly", "formal"].includes(req.body?.personality)
     ? req.body.personality
@@ -785,7 +862,8 @@ app.post("/api/chat", async (req, res) => {
     res.json({
       reply: result.reply,
       provider,
-      ...(result.toolsUsed.length ? { toolsUsed: result.toolsUsed } : {})
+      ...(result.toolsUsed.length ? { toolsUsed: result.toolsUsed } : {}),
+      ...(result.toolCallResults?.length ? { toolCallResults: result.toolCallResults } : {})
     });
   } catch (error) {
     if (controller.signal.aborted) return;
@@ -832,6 +910,11 @@ app.post("/api/build/suggest", async (req, res) => {
     return res.status(400).json({ error: "Enter a coding request under 2,000 characters." });
   }
 
+  const controller = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
+
   try {
     const file = resolveBuildFile(req.body?.path);
     const current = getBuildFileContent(file);
@@ -844,13 +927,14 @@ app.post("/api/build/suggest", async (req, res) => {
         role: "user",
         content: `Requested change:\n${prompt}\n\nSelected file: ${file.relativePath}\nCurrent file contents:\n${current.content}`
       }
-    ]);
+    ], controller.signal);
 
     if (!reply || Buffer.byteLength(reply, "utf8") > buildFileLimit) {
       return res.status(502).json({ error: "The model returned an empty or oversized file proposal." });
     }
     res.json({ path: file.relativePath, baseHash: current.hash, proposal: reply, provider });
   } catch (error) {
+    if (controller.signal.aborted) return;
     res.status(503).json({ error: error.message });
   }
 });
@@ -881,9 +965,14 @@ app.post("/api/build/apply", (req, res) => {
   }
 });
 
-function startServer(port, attempts = 0) {
-  const server = app.listen(port, "0.0.0.0", () => {
-    console.log(`EVA running on port ${port}`);
+function startServer(port, attempts = 0, host = configuredHost) {
+  const server = app.listen(port, host, () => {
+    const address = server.address();
+    const listeningPort = typeof address === "object" && address ? address.port : port;
+    console.log(`EVA running on ${host}:${listeningPort}`);
+    if (!isLoopbackHost(host)) {
+      console.warn("EVA is exposed beyond localhost. Use only on a trusted network; APIs do not require user authentication.");
+    }
   });
 
   server.on("error", (error) => {
@@ -896,7 +985,7 @@ function startServer(port, attempts = 0) {
 
         const nextPort = port + 1;
         console.warn(`Port ${port} is busy; retrying on ${nextPort}`);
-        startServer(nextPort, attempts + 1);
+        startServer(nextPort, attempts + 1, host);
       });
       return;
     }
@@ -907,4 +996,8 @@ function startServer(port, attempts = 0) {
 }
 
 const preferredPort = Number(process.env.PORT) || 3000;
-startServer(preferredPort);
+if (require.main === module) {
+  startServer(preferredPort);
+}
+
+module.exports = { app, parseCalculation, readResponseTextLimited, resolveBuildFile, startServer };

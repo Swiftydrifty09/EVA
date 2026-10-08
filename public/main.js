@@ -291,10 +291,12 @@ function saveLocalData() {
     localStorage.setItem(profilesStorageKey, JSON.stringify(profiles));
     localStorage.setItem(activeProfileStorageKey, activeProfileId);
     updateMemorySummary();
+    renderLocalRecords();
     return true;
   } catch (error) {
     toolStatus.textContent = `This change is available only until the page closes because browser storage failed: ${error.message}`;
     updateMemorySummary();
+    renderLocalRecords();
     return false;
   }
 }
@@ -308,8 +310,166 @@ function updateMemorySummary() {
   }
 }
 
+function renderLocalRecords() {
+  const list = document.getElementById("local-data-list");
+  if (!list || !localData) return;
+  const filter = document.getElementById("local-data-filter").value.trim().toLocaleLowerCase();
+  list.replaceChildren();
+
+  const records = [
+    ...localData.facts.map((fact, index) => ({
+      type: "MEMORY",
+      id: String(index),
+      title: fact,
+      remove: () => { localData.facts.splice(index, 1); }
+    })),
+    ...localData.tasks.map((task) => ({
+      type: task.status === "open" ? "TASK" : "DONE",
+      id: task.id,
+      title: `${task.title}${task.dueAt ? ` · due ${new Date(task.dueAt).toLocaleDateString()}` : ""}`,
+      complete: task.status === "open",
+      toggle: () => { task.status = task.status === "open" ? "done" : "open"; },
+      remove: () => { localData.tasks = localData.tasks.filter((item) => item.id !== task.id); }
+    })),
+    ...localData.notes.map((note) => ({
+      type: "NOTE",
+      id: note.id,
+      title: note.content,
+      remove: () => { localData.notes = localData.notes.filter((item) => item.id !== note.id); }
+    }))
+  ].filter((record) => `${record.type} ${record.title}`.toLocaleLowerCase().includes(filter));
+
+  if (!records.length) {
+    const empty = document.createElement("p");
+    empty.className = "local-data-empty";
+    empty.textContent = filter ? "No saved items match this filter." : "This profile has no saved facts, tasks, or notes yet.";
+    list.append(empty);
+    return;
+  }
+
+  records.forEach((record) => {
+    const row = document.createElement("div");
+    row.className = "local-data-row";
+    const content = document.createElement("div");
+    content.className = "local-data-content";
+    const type = document.createElement("span");
+    type.className = "local-data-type";
+    type.textContent = record.type;
+    const title = document.createElement("span");
+    title.className = "local-data-title";
+    title.textContent = record.title;
+    title.title = record.title;
+    content.append(type, title);
+
+    const actions = document.createElement("div");
+    actions.className = "local-data-actions";
+    if (record.toggle) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.textContent = record.complete ? "Done" : "Reopen";
+      toggle.setAttribute("aria-label", `${record.complete ? "Complete" : "Reopen"} task ${record.title}`);
+      toggle.addEventListener("click", () => {
+        record.toggle();
+        saveLocalData();
+      });
+      actions.append(toggle);
+    }
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `Delete ${record.type.toLocaleLowerCase()}: ${record.title}`);
+    remove.addEventListener("click", () => {
+      record.remove();
+      const saved = saveLocalData();
+      toolStatus.textContent = saved
+        ? `Removed saved ${record.type.toLocaleLowerCase()}.`
+        : `Removed this saved ${record.type.toLocaleLowerCase()} for this session only; browser storage is unavailable.`;
+    });
+    actions.append(remove);
+    row.append(content, actions);
+    list.append(row);
+  });
+}
+
 function createLocalId() {
   return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function exportActiveProfile() {
+  const backup = JSON.stringify({ schemaVersion: 1, profile: localData }, null, 2);
+  const url = URL.createObjectURL(new Blob([backup], { type: "application/json" }));
+  const link = document.createElement("a");
+  const profileName = (localData.profile.name || "eva-profile").toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "eva-profile";
+  link.href = url;
+  link.download = `${profileName}-backup.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toolStatus.textContent = "Exported this profile as a JSON file. The backup was created in your browser.";
+}
+
+function hasDuplicateIds(items) {
+  const ids = new Set();
+  return items.some((item) => {
+    if (!item || typeof item.id !== "string" || !item.id.trim() || ids.has(item.id)) return true;
+    ids.add(item.id);
+    return false;
+  });
+}
+
+function validateProfileBackup(data) {
+  const profile = data?.profile;
+  if (data?.schemaVersion !== 1 || !profile || typeof profile !== "object" ||
+      typeof profile.profile?.name !== "string" || profile.profile.name.length > 80 ||
+      typeof profile.voiceName !== "string" || profile.voiceName.length > 200 || !Array.isArray(profile.facts) ||
+      !Array.isArray(profile.tasks) || !Array.isArray(profile.notes) ||
+      profile.facts.length > 100 || profile.tasks.length > 100 || profile.notes.length > 100 ||
+      hasDuplicateIds(profile.tasks) || hasDuplicateIds(profile.notes) ||
+      profile.facts.some((fact) => typeof fact !== "string" || fact.length > 300) ||
+      profile.tasks.some((task) =>
+        typeof task.title !== "string" || !task.title.trim() || task.title.length > 200 ||
+        !Number.isFinite(task.createdAt) ||
+        (task.dueAt != null && !Number.isFinite(task.dueAt)) ||
+        !["open", "done"].includes(task.status)
+      ) ||
+      profile.notes.some((note) =>
+        typeof note.title !== "string" || !note.title.trim() || note.title.length > 60 ||
+        typeof note.content !== "string" || note.content.length > 2000 ||
+        !Number.isFinite(note.createdAt)
+      )) {
+    throw new Error("This file is not a valid EVA profile backup.");
+  }
+  return normalizeProfile({ ...profile, id: localData.id }, localData.id);
+}
+
+async function importActiveProfile(file) {
+  if (!file) return;
+  if (file.size > 1_000_000) throw new Error("Profile backups must be smaller than 1 MB.");
+  const imported = validateProfileBackup(JSON.parse(await file.text()));
+  const duplicate = profiles.find((profile) =>
+    profile.id !== activeProfileId && imported.profile.name &&
+    profile.profile.name.toLocaleLowerCase() === imported.profile.name.toLocaleLowerCase()
+  );
+  if (duplicate) throw new Error(`A profile named ${imported.profile.name} already exists. Rename or switch profiles first.`);
+  if (!window.confirm(`Replace saved facts, tasks, notes, and profile name for ${localData.profile.name || "this profile"} with the contents of ${file.name}?`)) {
+    toolStatus.textContent = "Profile import cancelled; existing saved data was not changed.";
+    return;
+  }
+
+  const index = profiles.findIndex((profile) => profile.id === activeProfileId);
+  if (index < 0) throw new Error("The active profile is no longer available. Reload EVA and try again.");
+  const previousProfile = profiles[index];
+  profiles[index] = imported;
+  localData = imported;
+  renderProfiles();
+  if (!saveLocalData()) {
+    profiles[index] = previousProfile;
+    localData = previousProfile;
+    renderProfiles();
+    throw new Error("The imported profile could not be saved to browser storage; the previous profile was restored.");
+  }
+  if ("speechSynthesis" in window) populateSpeechVoices();
+  toolStatus.textContent = `Imported ${file.name} into ${localData.profile.name || "the active profile"}.`;
 }
 
 function renderProfiles() {
@@ -322,6 +482,7 @@ function renderProfiles() {
   profileSelect.value = activeProfileId;
   document.getElementById("profile-name").value = localData.profile.name;
   updateMemorySummary();
+  renderLocalRecords();
 }
 
 function setActiveProfile(profileId) {
@@ -436,8 +597,11 @@ function restoreMessages() {
 }
 
 function parseCalculation(expression) {
+  if (typeof expression !== "string" || expression.length > 256) {
+    throw new Error("Calculations must be 256 characters or fewer");
+  }
   const tokens = expression.match(/\d*\.?\d+|[()+\-*/%]/g);
-  if (!tokens || tokens.join("") !== expression.replace(/\s+/g, "")) {
+  if (!tokens || tokens.length > 128 || tokens.join("") !== expression.replace(/\s+/g, "")) {
     throw new Error("Invalid calculation");
   }
 
@@ -722,7 +886,7 @@ function createLocalBriefing() {
   }
   if (activeTimers.length) {
     entries.push("Next active timers:", ...activeTimers.slice(0, 3).map((timer) =>
-      `${timer.label} · ${formatDuration(timer.dueAt - now.getTime())} remaining`
+      `${timer.label} · ${formatTimerDuration(timer.dueAt - now.getTime())} remaining`
     ));
   } else {
     entries.push("No active timers.");
@@ -842,7 +1006,18 @@ function runLocalCommand(message) {
   const normalized = text.toLocaleLowerCase();
 
   if (/^(?:help|commands|what can you do|show commands)$/.test(normalized)) {
-    return "I can help locally with time and date, calculations, unit conversions, random numbers, timers, stopwatch, saved memories, tasks, notes, and system diagnostics. Weather, headlines, maps, and web searches need an internet connection.";
+    addLocalListCard("OFFLINE COMMANDS", [
+      "Time and date: “What time is it?” or “Time in Tokyo”",
+      "Math and conversion: “Calculate 12 * (4 + 3)” or “Convert 5 miles to km”",
+      "Timers: “Set a timer for 5 minutes” or “Remind me to stretch in 10 seconds”",
+      "Tasks: “Create a task: review the release”, “List tasks”, “Complete task 1”",
+      "Notes and memory: “Save a note: launch checklist”, “Remember that I prefer concise answers”, “Forget concise answers”",
+      "Saved info: “What did I save about the trip?” or “Read my last note”",
+      "Briefing and utilities: “Brief me”, “Start stopwatch”, “Random number between 1 and 100”, “Run diagnostics”",
+      "Manage saved profile data, export/import a backup, and review timers in Agent Tools.",
+      "Weather, maps, news, web search, and online AI chat need an internet connection."
+    ], "No local commands are available.");
+    return "Here are commands EVA can run locally without an AI service or API key.";
   }
 
   if (/^(?:give me |pick )?(?:a )?random(?: number)?(?: between| from) /i.test(text) ||
@@ -1176,7 +1351,7 @@ function saveTimers() {
   }
 }
 
-function formatDuration(milliseconds) {
+function formatTimerDuration(milliseconds) {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -1194,7 +1369,12 @@ function renderTimers() {
     const row = document.createElement("div");
     row.className = "timer-row";
     const label = document.createElement("span");
+    label.className = "timer-label";
     label.textContent = `${timer.label} · ${new Date(timer.dueAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+    const remaining = document.createElement("span");
+    remaining.className = "timer-remaining";
+    remaining.dataset.timerId = timer.id;
+    remaining.setAttribute("aria-live", "off");
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "timer-cancel";
@@ -1206,8 +1386,16 @@ function renderTimers() {
       renderTimers();
       toolStatus.textContent = "Timer cancelled.";
     });
-    row.append(label, cancel);
+    row.append(label, remaining, cancel);
     timerList.append(row);
+  });
+  updateTimerCountdowns();
+}
+
+function updateTimerCountdowns() {
+  timerList.querySelectorAll(".timer-remaining").forEach((remaining) => {
+    const timer = timers.find((item) => item.id === remaining.dataset.timerId);
+    if (timer) remaining.textContent = `${formatTimerDuration(timer.dueAt - Date.now())} left`;
   });
 }
 
@@ -1217,11 +1405,12 @@ function addTimer(label, duration) {
     return;
   }
 
-  const timer = { id: crypto.randomUUID(), label, dueAt: Date.now() + duration };
+  const timerLabel = label.trim() || "Timer";
+  const timer = { id: createLocalId(), label: timerLabel, dueAt: Date.now() + duration };
   timers.push(timer);
   saveTimers();
   renderTimers();
-  const message = `${label} set for ${formatDuration(duration)}. It will alert while this page is open; notifications can be enabled below.`;
+  const message = `${timerLabel} set for ${formatTimerDuration(duration)}. It will alert while this page is open; notifications can be enabled below.`;
   addToolCard("TIMER SET", message);
   speak(message);
 }
@@ -1229,7 +1418,10 @@ function addTimer(label, duration) {
 function checkTimers() {
   const now = Date.now();
   const due = timers.filter((timer) => timer.dueAt <= now);
-  if (!due.length) return;
+  if (!due.length) {
+    updateTimerCountdowns();
+    return;
+  }
 
   const dueIds = new Set(due.map((timer) => timer.id));
   timers = timers.filter((timer) => !dueIds.has(timer.id));
@@ -2002,6 +2194,7 @@ function toggleStopwatch() {
     stopwatchStartedAt = Date.now();
     stopwatchInterval = setInterval(renderStopwatch, 100);
   }
+  saveStopwatchState();
   renderStopwatch();
 }
 
@@ -2009,6 +2202,33 @@ function resetStopwatch() {
   stopwatchStartedAt = 0;
   stopwatchElapsed = 0;
   clearInterval(stopwatchInterval);
+  saveStopwatchState();
+  renderStopwatch();
+}
+
+function saveStopwatchState() {
+  try {
+    localStorage.setItem("jarvis-stopwatch", JSON.stringify({
+      elapsed: stopwatchElapsed,
+      startedAt: stopwatchStartedAt
+    }));
+  } catch (error) {
+    toolStatus.textContent = `Stopwatch state could not be saved: ${error.message}`;
+  }
+}
+
+function restoreStopwatchState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("jarvis-stopwatch") || "null");
+    if (saved && Number.isFinite(saved.elapsed) && saved.elapsed >= 0 &&
+        Number.isFinite(saved.startedAt) && saved.startedAt >= 0 && saved.startedAt <= Date.now()) {
+      stopwatchElapsed = saved.elapsed;
+      stopwatchStartedAt = saved.startedAt;
+      if (stopwatchStartedAt) stopwatchInterval = setInterval(renderStopwatch, 100);
+    }
+  } catch (error) {
+    toolStatus.textContent = `Saved stopwatch state could not be read: ${error.message}`;
+  }
   renderStopwatch();
 }
 
@@ -2090,6 +2310,10 @@ function getAliasedCommand(text) {
 async function sendMessage(message) {
   const text = message.trim();
   if (!text || isProcessing) return;
+  if (text.length > 8000) {
+    addToolCard("MESSAGE TOO LONG", "Messages must be 8,000 characters or fewer.");
+    return;
+  }
 
   sessionCommandCount += 1;
   updateLocalDiagnostics();
@@ -2225,14 +2449,22 @@ async function sendMessage(message) {
     }
     const reply = data.reply || getReply(text);
     addMessage(reply, "assistant");
-    if (Array.isArray(data.toolsUsed) && data.toolsUsed.length) {
+    const toolCalls = Array.isArray(data.toolCallResults)
+      ? data.toolCallResults
+      : Array.isArray(data.toolsUsed)
+        ? data.toolsUsed.map((name) => ({ name }))
+        : [];
+    if (toolCalls.length) {
       const toolLabels = {
         get_current_time: "Current time",
         get_system_status: "Device status"
       };
-      const usedTools = [...new Set(data.toolsUsed)]
-        .map((name) => toolLabels[name] || "Read-only assistant tool");
-      addToolCard("AI TOOLS USED", usedTools.join(" · "));
+      const callSummaries = toolCalls.map(({ name, succeeded }) => {
+        const label = toolLabels[name] || "Read-only assistant tool";
+        const outcome = succeeded === true ? "completed" : succeeded === false ? "failed" : "called";
+        return `${label}: ${outcome}`;
+      });
+      addToolCard("AI TOOL CALLS", callSummaries.join(" · "));
     }
     if (data.warning) addMessage(data.warning, "assistant");
     speak(reply);
@@ -2567,6 +2799,68 @@ document.getElementById("notification-button").addEventListener("click", () => e
 const profileSelect = document.getElementById("profile-select");
 const profileNameInput = document.getElementById("profile-name");
 window.addEventListener("storage", syncProfilesAcrossTabs);
+window.addEventListener("storage", (event) => {
+  if (event.key !== timerStorageKey && event.key !== null) return;
+  timers = loadTimers();
+  checkTimers();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) checkTimers();
+});
+document.getElementById("local-data-filter").addEventListener("input", renderLocalRecords);
+document.getElementById("profile-export").addEventListener("click", () => {
+  try {
+    exportActiveProfile();
+  } catch (error) {
+    toolStatus.textContent = `Could not export this profile: ${error.message}`;
+  }
+});
+document.getElementById("profile-import").addEventListener("click", () => {
+  document.getElementById("profile-import-input").click();
+});
+document.getElementById("profile-import-input").addEventListener("change", async (event) => {
+  const file = event.currentTarget.files[0];
+  try {
+    await importActiveProfile(file);
+  } catch (error) {
+    toolStatus.textContent = `Could not import profile: ${error.message}`;
+  } finally {
+    event.currentTarget.value = "";
+  }
+});
+document.getElementById("profile-clear").addEventListener("click", () => {
+  if (!window.confirm(`Clear all saved facts, tasks, and notes for ${localData.profile.name || "this profile"}? This cannot be undone unless you exported a backup.`)) {
+    toolStatus.textContent = "Saved profile items were not changed.";
+    return;
+  }
+  localData.facts = [];
+  localData.tasks = [];
+  localData.notes = [];
+  const saved = saveLocalData();
+  toolStatus.textContent = saved
+    ? "Cleared saved facts, tasks, and notes for the active profile."
+    : "Cleared these items for this session, but browser storage is unavailable.";
+});
+document.getElementById("profile-delete").addEventListener("click", () => {
+  if (profiles.length <= 1) {
+    toolStatus.textContent = "EVA keeps at least one local profile. Clear this profile’s saved items instead.";
+    return;
+  }
+  const name = localData.profile.name || "Unnamed profile";
+  if (!window.confirm(`Delete the ${name} profile and all of its saved facts, tasks, and notes? This cannot be undone unless you exported a backup.`)) {
+    toolStatus.textContent = "Profile was not deleted.";
+    return;
+  }
+  profiles = profiles.filter((profile) => profile.id !== activeProfileId);
+  localData = profiles[0];
+  activeProfileId = localData.id;
+  renderProfiles();
+  const saved = saveLocalData();
+  toolStatus.textContent = saved
+    ? `Deleted ${name} and switched to ${localData.profile.name || "the remaining profile"}.`
+    : `Deleted ${name} for this session, but browser storage is unavailable.`;
+  if ("speechSynthesis" in window) populateSpeechVoices();
+});
 profileSelect.addEventListener("change", () => setActiveProfile(profileSelect.value));
 document.getElementById("profile-save").addEventListener("click", () => {
   const name = profileNameInput.value.trim().slice(0, 80);
@@ -2746,7 +3040,7 @@ applyAppearancePreferences();
 updateNetworkStatus();
 window.addEventListener("online", updateNetworkStatus);
 window.addEventListener("offline", updateNetworkStatus);
-renderStopwatch();
+restoreStopwatchState();
 renderCommandAliases();
 updateLocalDiagnostics();
 setInterval(updateLocalDiagnostics, 1000);
