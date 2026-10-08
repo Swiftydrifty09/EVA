@@ -20,7 +20,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_system_status",
-      description: "Get current CPU and available GPU utilization for the computer running JARVIS.",
+      description: "Get current CPU and available GPU utilization for the computer running EVA.",
       parameters: {
         type: "object",
         properties: {},

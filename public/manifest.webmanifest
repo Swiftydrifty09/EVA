@@ -1,7 +1,7 @@
 {
-  "name": "JARVIS Local Assistant",
-  "short_name": "JARVIS",
-  "description": "A local-first personal assistant.",
+  "name": "EVA - Enhanced Virtual Intelligence & Assistance",
+  "short_name": "EVA",
+  "description": "A local-first virtual intelligence and assistant.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -1,7 +1,7 @@
-# JARVIS AI System
+# EVA - Enhanced Virtual Intelligence & Assistance
 
 ## Overview
-A modular AI assistant interface inspired by JARVIS.
+A modular, local-first virtual intelligence and assistant.
 
 ## Structure
 - `public/index.html` → UI
@@ -19,10 +19,10 @@ A modular AI assistant interface inspired by JARVIS.
 2. Copy `.env.example` to `.env` and adjust `OLLAMA_MODEL` if needed.
 3. Keep Ollama running, then start the app with `npm start`.
 
-The app sends recent chat context to Ollama on your machine. It does not need an API key. If Ollama is unavailable, JARVIS falls back to local commands and displays a warning. To use OpenAI instead, set `AI_PROVIDER=openai` and `OPENAI_API_KEY` in `.env`; `AI_PROVIDER=local` disables hosted/local LLM calls.
+The app sends recent chat context to Ollama on your machine. It does not need an API key. If Ollama is unavailable, EVA falls back to local commands and displays a warning. To use OpenAI instead, set `AI_PROVIDER=openai` and `OPENAI_API_KEY` in `.env`; `AI_PROVIDER=local` disables hosted/local LLM calls.
 
 ## LocalAI
-JARVIS can use a LocalAI server through its OpenAI-compatible chat API. Start LocalAI, install a model there, then set these values in `.env` (replace the model with the name shown by your LocalAI instance):
+EVA can use a LocalAI server through its OpenAI-compatible chat API. Start LocalAI, install a model there, then set these values in `.env` (replace the model with the name shown by your LocalAI instance):
 
 ```dotenv
 AI_PROVIDER=localai
@@ -32,7 +32,7 @@ LOCALAI_MODEL=your-installed-model-name
 LOCALAI_API_KEY=
 ```
 
-Restart JARVIS after changing `.env`. Chat and Build mode use the same configured LocalAI model. JARVIS does not install or manage LocalAI models; follow the [LocalAI quickstart](https://localai.io/basics/getting_started/) to run the server and add a model.
+Restart EVA after changing `.env`. Chat and Build mode use the same configured LocalAI model. EVA does not install or manage LocalAI models; follow the [LocalAI quickstart](https://localai.io/basics/getting_started/) to run the server and add a model.
 
 ## Features
 - Web chat interface
@@ -52,12 +52,13 @@ Restart JARVIS after changing `.env`. Chat and Build mode use the same configure
 - Permission-based screen capture preview; screenshots stay in the browser and are not interpreted or uploaded
 - Local timers and reminders (`set a timer for 5 minutes`, `remind me to stretch in 10 seconds`); timer delivery requires the app tab to remain open
 - Offline unit conversions for length, mass, volume, and temperature (for example, `convert 5 miles to km`)
-- Installable offline app shell; open JARVIS once while online, then install it from the browser's app/install menu. Chat, live news, weather, and map lookups still need their respective server or internet access.
+- Installable offline app shell; open EVA once while online, then install it from the browser's app/install menu. Chat, live news, weather, and map lookups still need their respective server or internet access.
 - Multiple local profiles with separate names, spoken voices, remembered facts, tasks, and notes stored in browser localStorage; profile changes sync across open tabs of the same origin. These commands work without an API key and are not sent to the AI server
 - On-device daily briefing (`brief me`, `what should I focus on today`) summarizes local time, overdue and upcoming tasks, active timers, and saved-memory counts without making API requests
 - On-device search across saved profile facts, notes, and tasks (for example, `what did I save about the trip?`) plus date-based task reminders (for example, `remind me tomorrow to call Sam`); searches and reminders stay in local browser storage and make no API requests
 - Voice shortcuts include “repeat that” and “stop listening” in full-screen voice mode
 - Browser speech can use any voice installed in the browser, with a separately saved voice selection for each local profile; speech speed, pitch, and mute controls are stored locally
+- The default spoken voice prefers a feminine-sounding English browser voice when available; users can choose another installed voice per profile
 - Local stopwatch controls in Agent Tools, plus voice/text commands to start, stop, and reset it
 - Custom exact-phrase command aliases stored in this browser (for example, map “launch briefing” to “Brief me”)
 - Local diagnostics for browser speech support, connection state, host CPU/GPU readings, session uptime, command count, and browser storage usage

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#050a12" />
-    <title>JARVIS | Local Assistant</title>
+    <title>EVA | Enhanced Virtual Intelligence &amp; Assistance</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
@@ -13,9 +13,9 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand" href="/" aria-label="JARVIS home">
+        <a class="brand" href="/" aria-label="EVA home">
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="brand-name"><strong>JARVIS</strong><small>PERSONAL ASSISTANT</small></span>
+          <span class="brand-name"><strong>EVA</strong><small>ENHANCED VIRTUAL INTELLIGENCE &amp; ASSISTANCE</small></span>
         </a>
         <div class="topbar-status">
           <span class="status-light"></span>
@@ -30,8 +30,8 @@
       </header>
 
       <main class="workspace">
-        <section class="core-panel" aria-label="JARVIS holographic core">
-          <div class="panel-label"><span>JARVIS CORE</span><span class="core-state" id="core-state">STANDBY</span></div>
+        <section class="core-panel" aria-label="EVA holographic core">
+          <div class="panel-label"><span>EVA CORE</span><span class="core-state" id="core-state">STANDBY</span></div>
           <div class="core-visual" id="core-visual" aria-hidden="true">
             <div class="core-orbit orbit-one"></div>
             <div class="core-orbit orbit-two"></div>
@@ -54,7 +54,7 @@
               <h1 id="conversation-title">Your assistant, at the ready.</h1>
             </div>
             <div class="conversation-actions">
-              <div class="workspace-modes" role="tablist" aria-label="JARVIS workspace">
+              <div class="workspace-modes" role="tablist" aria-label="EVA workspace">
                 <button class="workspace-mode-button is-selected" id="chat-mode-button" type="button" role="tab" aria-selected="true" aria-controls="chat-workspace">Chat</button>
                 <button class="workspace-mode-button" id="build-mode-button" type="button" role="tab" aria-selected="false" aria-controls="build-workspace">Build</button>
               </div>
@@ -66,7 +66,7 @@
             <div class="message-list" id="chat" role="log" aria-live="polite" aria-relevant="additions text"></div>
 
             <form class="composer" id="composer">
-              <label class="visually-hidden" for="input">Message JARVIS</label>
+              <label class="visually-hidden" for="input">Message EVA</label>
               <input id="input" name="message" autocomplete="off" placeholder="Ask for a briefing, search saved info, set a reminder..." />
               <button class="voice-button" id="voice-button" type="button" aria-label="Start voice input" title="Start voice input">VOICE</button>
               <button class="send-button" type="submit"><span>Send</span><span aria-hidden="true">&#8594;</span></button>
@@ -181,8 +181,8 @@
               </select>
               <label for="speech-rate">SPEECH SPEED <output id="speech-rate-value" for="speech-rate">1.1×</output></label>
               <input id="speech-rate" type="range" min="0.7" max="1.6" step="0.1" value="1.1" />
-              <label for="speech-pitch">VOICE PITCH <output id="speech-pitch-value" for="speech-pitch">1.0</output></label>
-              <input id="speech-pitch" type="range" min="0.5" max="1.5" step="0.1" value="1" />
+              <label for="speech-pitch">VOICE PITCH <output id="speech-pitch-value" for="speech-pitch">1.1</output></label>
+              <input id="speech-pitch" type="range" min="0.5" max="1.5" step="0.1" value="1.1" />
               <button class="voice-test-button" id="speech-mute-button" type="button" aria-pressed="false">Mute speech</button>
               <button class="voice-test-button" id="voice-test-button" type="button">Preview voice</button>
             </div>

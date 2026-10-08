@@ -52,7 +52,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   box-shadow: inset 0 1px rgba(255,255,255,0.05), 0 8px 32px rgba(0, 0, 0, 0.22);
 }
 .brand { display: inline-flex; align-items: center; gap: 13px; color: var(--text); text-decoration: none; }
-.brand-name { display: inline-flex; align-items: center; }
+.brand-name { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 .brand strong {
   font-size: 16px;
   font-weight: 700;
@@ -804,7 +804,7 @@ body::after {
   box-shadow: 0 5px 24px rgba(0, 0, 0, 0.35), 0 1px rgba(2, 254, 255, 0.08);
 }
 .brand strong { color: #e2ffff; letter-spacing: 0.24em; text-shadow: 0 0 12px rgba(2, 254, 255, 0.28); }
-.brand small { color: #4c9ca4; letter-spacing: 0.24em; }
+.brand small { color: #4c9ca4; font-size: 7px; letter-spacing: 0.08em; }
 .brand-mark {
   border-color: rgba(2, 254, 255, 0.8);
   box-shadow: 0 0 18px rgba(2, 254, 255, 0.22), inset 0 0 10px rgba(2, 254, 255, 0.16);

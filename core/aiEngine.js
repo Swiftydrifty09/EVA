@@ -8,7 +8,7 @@ export async function handleUserMessage(userId, message) {
     {
       role: "system",
       content: `
-You are JARVIS.
+You are EVA (Enhanced Virtual Intelligence & Assistance).
 Respond clearly, directly, and intelligently.
 Always answer the user's question.
 Never stall or say you are "learning".

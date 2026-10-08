@@ -1,4 +1,4 @@
-const CACHE_NAME = "jarvis-app-shell-v8";
+const CACHE_NAME = "jarvis-app-shell-v9";
 const APP_SHELL = ["/", "/style.css", "/main.js", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -33,7 +33,7 @@ self.addEventListener("fetch", (event) => {
       fetch(request)
         .catch(async () => {
           const cached = await caches.match(request) || await caches.match("/");
-          if (!cached) throw new Error("JARVIS has not been opened online yet, so its offline app shell is unavailable.");
+          if (!cached) throw new Error("EVA has not been opened online yet, so its offline app shell is unavailable.");
           return cached;
         })
     );

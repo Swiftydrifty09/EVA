@@ -45,12 +45,15 @@ let stopwatchElapsed = 0;
 let stopwatchInterval;
 let localPreferences = loadLocalPreferences();
 let commandAliases = loadCommandAliases();
-const isGoogleUkMaleVoice = (voice) =>
-  /\bgoogle\b/i.test(voice.name) && /\bmale\b/i.test(voice.name) && /^en[-_]gb$/i.test(voice.lang);
+const isLegacyDefaultVoice = (voice) =>
+  /\bgoogle\b.*\bmale\b/i.test(voice.name) && /^en[-_]gb$/i.test(voice.lang) ||
+  /^Google UK English Male/i.test(voice.name);
+const isFeminineVoice = (voice) =>
+  /\b(female|samantha|victoria|ava|aria|jenny|zira|susan|hazel|karen|moira|tessa|fiona|serena|salli|joanna|kendra|kimberly|ivy|allison|emma|olivia|sara|natasha|julia|linda|heera|priya|monica|catherine|amelie|alice|elsa|evelyn)\b/i.test(voice.name);
 const pickPreferredVoice = (voices) =>
-  voices.find(isGoogleUkMaleVoice) ||
-  voices.find((voice) => /^Google UK English Male/i.test(voice.name)) ||
-  voices.find((voice) => /^en[-_]gb$/i.test(voice.lang)) ||
+  voices.find(isFeminineVoice) ||
+  voices.find((voice) => voice.default && /^en[-_]/i.test(voice.lang)) ||
+  voices.find((voice) => /^en[-_]/i.test(voice.lang)) ||
   voices[0];
 let recognition;
 let responseTimer;
@@ -77,7 +80,7 @@ let localData = profiles.find((profile) => profile.id === activeProfileId);
 function loadLocalPreferences() {
   const defaults = {
     speechRate: 1.1,
-    speechPitch: 1,
+    speechPitch: 1.1,
     speechMuted: false,
     theme: "blue",
     personality: "balanced",
@@ -387,7 +390,7 @@ function addMessage(text, sender, timestamp = new Date(), persist = true) {
 
   const meta = document.createElement("div");
   meta.className = "message-meta";
-  meta.textContent = sender === "user" ? "YOU" : "JARVIS";
+  meta.textContent = sender === "user" ? "YOU" : "EVA";
 
   const body = document.createElement("p");
   body.className = "message-body";
@@ -498,7 +501,7 @@ function getReply(message) {
   if (/\b(time|clock)\b/.test(normalized)) return `The local time is ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}.`;
   if (/\b(date|day|today)\b/.test(normalized)) return `Today is ${new Date().toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`;
   if (/\b(joke|make me laugh)\b/.test(normalized)) return "I told my computer I needed a break. It said: 'No problem, I'll go to sleep.'";
-  if (/\b(who are you|your name)\b/.test(normalized)) return "I am JARVIS, your local assistant. I can handle a few useful commands without connecting to an AI service.";
+  if (/\b(who are you|your name)\b/.test(normalized)) return "I am EVA, your Enhanced Virtual Intelligence & Assistance. I can handle a few useful commands without connecting to an AI service.";
   if (/\b(help|commands|what can you do)\b/.test(normalized)) return "Try: 'Brief me' for your local tasks and timers, 'What did I save about the trip?' to search local notes and memories, 'Remind me tomorrow to call Sam', 'What time is it?', 'Convert 5 miles to km', 'Set a timer for 5 minutes', 'Remember that I prefer concise answers', 'Create a task: review the release', 'List tasks', or 'Save a note: launch checklist'. Say 'repeat that' to hear the last reply again; in full-screen voice mode, say 'stop listening' to exit.";
   if (/\b(clear|clear chat|clear conversation)\b/.test(normalized)) {
     clearConversation();
@@ -1125,10 +1128,7 @@ function populateSpeechVoices() {
   }
 
   const voices = window.speechSynthesis.getVoices();
-  const preferredVoices = voices.filter((voice) =>
-    /^Google UK English Male$/i.test(voice.name) && /^en[-_]gb$/i.test(voice.lang)
-  );
-  const selectableVoices = preferredVoices.length > 0 ? preferredVoices : voices;
+  const selectableVoices = voices;
 
   voiceSelect.replaceChildren();
   if (selectableVoices.length === 0) {
@@ -1141,7 +1141,8 @@ function populateSpeechVoices() {
   selectableVoices.forEach((voice) => {
     voiceSelect.add(new Option(`${voice.name} (${voice.lang})`, voice.name));
   });
-  if (!selectableVoices.some((voice) => voice.name === localData.voiceName)) {
+  if (!selectableVoices.some((voice) => voice.name === localData.voiceName) ||
+      selectableVoices.some((voice) => voice.name === localData.voiceName && isLegacyDefaultVoice(voice))) {
     const defaultVoice = pickPreferredVoice(selectableVoices) || selectableVoices[0];
     localData.voiceName = defaultVoice.name;
     saveLocalData();
@@ -1240,7 +1241,7 @@ function checkTimers() {
     addToolCard("TIMER COMPLETE", message);
     speak(message);
     if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("JARVIS timer", { body: message });
+      new Notification("EVA timer", { body: message });
     }
   });
 }
@@ -1270,7 +1271,7 @@ function parseTimerRequest(message) {
 
 async function enableNotifications() {
   if (!("Notification" in window)) {
-    toolStatus.textContent = "This browser doesn't support desktop notifications. Timer alerts still appear in JARVIS while this tab is open.";
+    toolStatus.textContent = "This browser doesn't support desktop notifications. Timer alerts still appear in EVA while this tab is open.";
     return;
   }
 
@@ -1278,7 +1279,7 @@ async function enableNotifications() {
     const permission = await Notification.requestPermission();
     toolStatus.textContent = permission === "granted"
       ? "Timer notifications enabled. This page must stay open for timers to fire."
-      : "Notifications were not enabled; timers still alert inside JARVIS while this tab is open.";
+      : "Notifications were not enabled; timers still alert inside EVA while this tab is open.";
   } catch (error) {
     toolStatus.textContent = `Could not enable notifications. ${error.message}`;
   }
@@ -1316,7 +1317,7 @@ function weatherLabel(code) {
 function getPosition() {
   return new Promise((resolve, reject) => {
     if (!window.isSecureContext) {
-      reject(new Error("Browser location needs a secure page. Open JARVIS with HTTPS or localhost."));
+      reject(new Error("Browser location needs a secure page. Open EVA with HTTPS or localhost."));
       return;
     }
     if (!navigator.geolocation) {
@@ -1655,7 +1656,7 @@ async function showMap() {
     }
     runTool(async () => {
       controls.locationButton.disabled = true;
-      controls.status.textContent = "Google Maps is opening while JARVIS checks your approximate location…";
+      controls.status.textContent = "Google Maps is opening while EVA checks your approximate location…";
       try {
         const position = await getPosition();
         const latitude = Number(position.coords.latitude.toFixed(2));
@@ -2165,7 +2166,7 @@ async function sendMessage(message) {
     return;
   }
   if (/\b(scan|summari[sz]e|analy[sz]e)\b.*\b(file|document|text)\b/.test(normalized)) {
-    addToolCard("LOCAL FILE TOOL", "Use the Scan a text file control. JARVIS will count words, find headings, and identify frequent terms entirely in this browser.");
+    addToolCard("LOCAL FILE TOOL", "Use the Scan a text file control. EVA will count words, find headings, and identify frequent terms entirely in this browser.");
     setActive(false);
     return;
   }
@@ -2238,7 +2239,7 @@ async function sendMessage(message) {
     setActive(false);
   } catch (error) {
     if (controller.signal.aborted) {
-      addToolCard("RESPONSE STOPPED", "JARVIS stopped the active response.");
+      addToolCard("RESPONSE STOPPED", "EVA stopped the active response.");
       setActive(false);
       return;
     }
@@ -2460,7 +2461,7 @@ function setWorkspaceMode(mode) {
   document.getElementById("build-mode-button").classList.toggle("is-selected", isBuildMode);
   document.getElementById("clear-button").hidden = isBuildMode;
   document.querySelector("#conversation-title").textContent = isBuildMode
-    ? "Build with JARVIS."
+    ? "Build with EVA."
     : "Your assistant, at the ready.";
   document.querySelector(".conversation .eyebrow").textContent = isBuildMode ? "PROJECT WORKSPACE" : "VOICE & COMMAND";
   if (isBuildMode && !buildFilesLoaded) loadBuildFiles();
@@ -2557,7 +2558,7 @@ document.getElementById("copy-button").addEventListener("click", async () => {
   }
   try {
     await navigator.clipboard.writeText(lastReply);
-    toolStatus.textContent = "Copied the latest JARVIS reply to your clipboard.";
+    toolStatus.textContent = "Copied the latest EVA reply to your clipboard.";
   } catch (error) {
     toolStatus.textContent = `Clipboard access is unavailable. Select and copy the reply manually. ${error.message}`;
   }

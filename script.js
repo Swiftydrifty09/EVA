@@ -213,7 +213,7 @@ function respond(text) {
   }
 
   setTimeout(() => {
-    logMessage("JARVIS: " + reply, "ai");
+    logMessage("EVA: " + reply, "ai");
   }, 400);
 }
 
