@@ -16,12 +16,10 @@ A modular, local-first virtual intelligence and assistant.
 
 The server binds to `127.0.0.1` by default and rejects non-local Host headers. To make it reachable through a remote development environment's port forward, set `HOST=0.0.0.0` in your ignored `.env` file. This explicitly exposes EVA and its coding endpoints to anyone who can reach that forwarded port; use only a private, trusted environment. Never store real credentials in tracked files.
 
-## Local AI with Ollama
-1. Install Ollama and download the model: `ollama pull jarvis-tech/Jarvis_Distilled_v1:latest`
-2. Copy `.env.example` to `.env` and adjust `OLLAMA_MODEL` if needed.
-3. Keep Ollama running, then start the app with `npm start`.
+## AI Provider
+EVA defaults to `AI_PROVIDER=local` and needs no API key. Local mode supports built-in commands and saved profile tools, but does not generate open-ended AI responses or Build proposals. Those features need a model provider.
 
-The app sends recent chat context to Ollama on your machine. It does not need an API key. If Ollama is unavailable, EVA falls back to local commands and displays a warning. To use OpenAI instead, set `AI_PROVIDER=openai` and `OPENAI_API_KEY` in `.env`; `AI_PROVIDER=local` disables hosted/local LLM calls.
+OpenAI requires an API key and may incur separate usage charges; it is not included with a ChatGPT subscription. Ollama and LocalAI require a model server running on a machine EVA can reach. If you do not use APIs and cannot run a model server, keep EVA in local mode. Never put API keys in browser code or commit them.
 
 ## LocalAI
 EVA can use a LocalAI server through its OpenAI-compatible chat API. Start LocalAI, install a model there, then set these values in `.env` (replace the model with the name shown by your LocalAI instance):
