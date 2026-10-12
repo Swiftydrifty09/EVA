@@ -1,30 +1,81 @@
-# EVA - Enhanced Virtual Intelligence & Assistance
+# EVA — Enhanced Virtual Intelligence & Assistance
 
-## Overview
-A modular, local-first virtual intelligence and assistant.
+A modular, local-first virtual assistant. EVA runs a small Node server on your machine and a plain HTML/CSS/JS interface in your browser. It works fully offline in its default mode and can optionally connect to a model provider for open-ended conversation.
 
-## Structure
-- `public/index.html` → UI
-- `public/style.css` → Styling
-- `public/main.js` → Browser interaction logic
-- `services/server.js` → Web server and AI provider integration
+**At a glance**
 
-## Running
-1. Install dependencies: `npm install`
-2. Start the app: `npm start`
-3. Open the forwarded port printed by the server (default is `3000`, or the value in `PORT` if you override it).
+- **Local by default.** No API key, no account, no cloud dependency.
+- **Private by design.** Profiles, notes, tasks, and chat history live in your browser's localStorage.
+- **Bring your own model.** Ollama, LocalAI, or OpenAI, selected with one environment variable.
+- **Constrained tools.** The chat model can call only a short list of read-only server tools. Shell and file tools are never exposed to chat.
 
-The server binds to `127.0.0.1` by default and rejects non-local Host headers. To make it reachable through a remote development environment's port forward, set `HOST=0.0.0.0` in your ignored `.env` file. This explicitly exposes EVA and its coding endpoints to anyone who can reach that forwarded port; use only a private, trusted environment. Never store real credentials in tracked files.
+---
 
-## AI Provider
-EVA defaults to `AI_PROVIDER=local` and needs no API key. Local mode supports built-in commands and saved profile tools, but does not generate open-ended AI responses or Build proposals. Those features need a model provider.
+## Quick Start
 
-OpenAI requires an API key and may incur separate usage charges; it is not included with a ChatGPT subscription. Ollama and LocalAI require a model server running on a machine EVA can reach. If you do not use APIs and cannot run a model server, keep EVA in local mode. Never put API keys in browser code or commit them.
+```bash
+npm install
+npm start
+```
 
-## LocalAI
-EVA can use a LocalAI server through its OpenAI-compatible chat API. Start LocalAI, install a model there, then set these values in `.env` (replace the model with the name shown by your LocalAI instance):
+Open the address printed by the server. The default port is `3000`; override it with `PORT`.
 
-```dotenv
+Run the regression tests with:
+
+```bash
+npm test
+```
+
+---
+
+## Project Structure
+
+| Path | Purpose |
+| --- | --- |
+| `public/index.html` | User interface |
+| `public/style.css` | Styling |
+| `public/main.js` | Browser interaction logic |
+| `services/server.js` | Web server and AI provider integration |
+
+The Node server serves the browser app from `public/`.
+
+---
+
+## Configuration
+
+Settings live in an ignored `.env` file at the project root. Restart EVA after changing it.
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PORT` | Port the server listens on | `3000` |
+| `HOST` | Interface the server binds to | `127.0.0.1` |
+| `AI_PROVIDER` | `local`, `ollama`, `localai`, or `openai` | `local` |
+| `LOCALAI_BASE_URL` | LocalAI OpenAI-compatible endpoint | none |
+| `LOCALAI_MODEL` | Model name as shown by your LocalAI instance | none |
+| `LOCALAI_API_KEY` | Only if LocalAI authentication is enabled | empty |
+
+<!-- TODO: document the OpenAI and Ollama environment variables here. -->
+
+> Never put API keys in browser code, and never commit `.env` or any real credentials.
+
+---
+
+## AI Providers
+
+| Provider | Needs | Cost | Open-ended chat | Build mode |
+| --- | --- | --- | --- | --- |
+| `local` (default) | Nothing | Free | No | No |
+| `ollama` | Ollama server reachable by EVA | Free (your hardware) | Yes | Yes |
+| `localai` | LocalAI server with an installed model | Free (your hardware) | Yes | Yes |
+| `openai` | OpenAI API key | Separate usage charges (not included with a ChatGPT subscription) | Yes | Yes |
+
+**Local mode** supports the built-in command parser and saved profile tools. It does not generate open-ended AI responses or Build proposals. If you cannot use an API or run a model server, local mode is the intended choice.
+
+### LocalAI setup
+
+EVA talks to LocalAI through its OpenAI-compatible chat API. Start LocalAI, install a model there, then add this to `.env`:
+
+```ini
 AI_PROVIDER=localai
 LOCALAI_BASE_URL=http://127.0.0.1:8080/v1
 LOCALAI_MODEL=your-installed-model-name
@@ -32,53 +83,145 @@ LOCALAI_MODEL=your-installed-model-name
 LOCALAI_API_KEY=
 ```
 
-Restart EVA after changing `.env`. Chat and Build mode use the same configured LocalAI model. EVA does not install or manage LocalAI models; follow the [LocalAI quickstart](https://localai.io/basics/getting_started/) to run the server and add a model.
+Chat and Build mode share the same configured model. EVA does not install or manage LocalAI models; follow the LocalAI quickstart to run the server and add one.
+
+---
+
+## Security
+
+- **Loopback only by default.** The server binds to `127.0.0.1` and rejects non-local `Host` headers.
+- **Remote access is opt-in.** To use a remote development environment's port forward, set `HOST=0.0.0.0` in your ignored `.env` file. This exposes EVA and its coding endpoints to anyone who can reach that port. Use it only in a private, trusted environment.
+- **Read-only chat tools.** The model can call only current-time and host CPU/GPU status tools, and the number of tool calls per request is capped.
+- **Build never executes.** The Build workspace shows single-file proposals for your review and approval. Shell commands are not executed.
+- **No secrets in tracked files.** Keep credentials in `.env`.
+
+---
+
+## Privacy: Where Your Data Goes
+
+| Stays on your device | Sent to your configured AI provider | Requires internet or a third party |
+| --- | --- | --- |
+| Local commands, calculations, conversions | Chat messages | Weather (Open-Meteo) |
+| Profiles, facts, tasks, notes | Your selected response style and AI skill | News (Google News, NPR, BBC News, The Guardian RSS) |
+| Daily briefing, saved-data search | Results of any tool the model calls | Place search and map preview (Google Maps) |
+| Timers, reminders, stopwatch, aliases | File contents you select in Build mode | Web search |
+| Quick scans of text files under 1 MB | | |
+| Screen capture preview (not interpreted or uploaded) | | |
+| Microphone visualizer (analyzed in-browser) | | |
+
+Profile data is specific to the browser and origin. Clear it through the browser's site-storage settings, or use the explicit clear/delete profile commands.
+
+---
 
 ## Features
-- Web chat interface
-- Browser voice input and speech output (browser/device support required)
-- Interrupt active AI requests with Stop; cancellation is passed through to supported providers, and in-progress browser speech can also be stopped
-- Optional, non-blocking cinematic boot sequence; respects the browser's reduced-motion preference
-- Local command parser (greeting, local or worldwide time by city/time zone, date, joke, calculation, unit conversion, open sites, web search)
-- Local Ollama, LocalAI, or OpenAI backend via `/api/chat`
-- AI tool routing for current time and read-only host CPU/GPU status; model tool calls are capped, and shell or file tools are not exposed to chat
-- In-app Build workspace for reviewing and approving single-file AI proposals; selected file contents are sent to the configured AI provider, and shell commands are not executed
-- Live host CPU utilization and GPU utilization when supported GPU metrics tools are installed (`nvidia-smi` or AMD `rocm-smi`); readings are served by the local Node server
-- Chat history in localStorage
-- Approximate-location weather from the public Open-Meteo service (requires location permission and internet)
-- Search places for an inline map preview and Google Maps link, or open your approximate current location in Google Maps (requires internet; location permission is requested only when selected)
-- U.S. and world headlines aggregated from Google News, NPR, BBC News, and The Guardian public RSS feeds (requires internet)
-- On-device quick scans for selected text files under 1 MB; file content is not uploaded
-- Permission-based screen capture preview; screenshots stay in the browser and are not interpreted or uploaded
-- Local timers and reminders (`set a timer for 5 minutes`, `remind me to stretch in 10 seconds`) with a live remaining-time display; timer delivery requires the app tab to remain open
-- Offline unit conversions for length, mass, volume, and temperature (for example, `convert 5 miles to km`)
-- Installable offline app shell; open EVA once while online, then install it from the browser's app/install menu. Chat, live news, weather, and map lookups still need their respective server or internet access.
-- Multiple local profiles with separate names, spoken voices, remembered facts, tasks, and notes stored in browser localStorage; profile changes sync across open tabs of the same origin. Review, filter, complete, reopen, or delete saved items in Agent Tools; export/import a profile JSON backup or explicitly clear/delete profile data. These commands work without an API key and are not sent to the AI server
-- On-device daily briefing (`brief me`, `what should I focus on today`) summarizes local time, overdue and upcoming tasks, active timers, and saved-memory counts without making API requests
-- On-device search across saved profile facts, notes, and tasks (for example, `what did I save about the trip?`) plus date-based task reminders (for example, `remind me tomorrow to call Sam`); searches and reminders stay in local browser storage and make no API requests
-- Voice shortcuts include “repeat that” and “stop listening” in full-screen voice mode
-- Browser speech can use any voice installed in the browser, with a separately saved voice selection for each local profile; speech speed, pitch, and mute controls are stored locally
-- The default spoken voice prefers a feminine-sounding English browser voice when available; users can choose another installed voice per profile
-- Local stopwatch controls in Agent Tools, plus voice/text commands to start, stop, and reset it; elapsed/running state survives page reloads
-- Custom exact-phrase command aliases stored in this browser (for example, map “launch briefing” to “Brief me”)
-- Local diagnostics for browser speech support, connection state, host CPU/GPU readings, session uptime, command count, and browser storage usage
-- Local random number generation (`random number between 1 and 100`) and an expanded local help command
-- Locally saved HUD themes (deep blue, arctic cyan, violet, amber, rose, emerald, crimson, and solar gold)
-- Assistant response styles (balanced, concise, friendly, and formal) and AI skills (general, research analyst, code assistant, tutor, and writing coach) are sent as fixed allowlisted preferences with chat requests and saved in this browser. Skills guide responses but do not grant additional tool access; chat models can call only the listed read-only server tools. Requests and any tool results go to the configured AI provider; on-device commands remain in this browser
-- Optional microphone-reactive core visualizer; microphone access is requested only when enabled, audio is analyzed in-browser, and capture stops when disabled or voice mode exits
-- Network status indicator distinguishes offline local tools from features that need internet access
-- Keyboard shortcuts: `Ctrl+K` focuses chat, `Escape` closes the assistant menu, and `Ctrl+Shift+V` activates full-screen voice mode
-- Browser speech includes voice preview and copy-last-reply clipboard action
-- Optional desktop notifications for timers, enabled only after an explicit user click
-- Cancel timers with `cancel timers`; timers are saved locally and restored on the next visit. Remaining time updates while EVA is open and expired timers are checked when the tab becomes visible.
 
-## Notes
-- Do not merge HTML, CSS, and JS into one file.
+### Conversation and AI
+
+- Web chat interface with history saved in localStorage
+- Stop button to interrupt active AI requests; cancellation is passed through to supported providers
+- Response styles: balanced, concise, friendly, formal
+- AI skills: general, research analyst, code assistant, tutor, writing coach. Skills guide responses only and grant no additional tool access
+- Build workspace for reviewing and approving single-file AI proposals
+
+### Local Command Parser
+
+Works without an API key.
+
+- Greetings, date, jokes, random numbers, and an expanded `help` command
+- Local and worldwide time by city or IANA time zone (uses the browser's time-zone data)
+- Calculations and offline unit conversions (length, mass, volume, temperature)
+- Open sites and web search
+- Custom exact-phrase aliases, for example mapping "launch briefing" to "Brief me"
+
+### Productivity
+
+- Timers and reminders with a live countdown, saved locally and restored on your next visit
+- Stopwatch with voice/text control; state survives page reloads
+- Tasks and notes: review, filter, complete, reopen, delete
+- Date-based task reminders ("remind me tomorrow to call Sam")
+- On-device daily briefing: local time, overdue and upcoming tasks, active timers, and saved-memory counts. It highlights due dates and does not infer priorities
+- On-device search across saved facts, notes, and tasks
+- Optional desktop notifications for timers, enabled only after an explicit click
+
+### Profiles and Memory
+
+- Multiple local profiles, each with its own name, spoken voice, remembered facts, tasks, and notes
+- Profile changes sync across open tabs of the same origin
+- JSON export and import for backups
+
+### Information
+
+- Approximate-location weather (requires location permission)
+- U.S. and world headlines aggregated from public RSS feeds
+- Place search with inline map preview and Google Maps link, or open your approximate location in Google Maps (location permission is requested only when selected)
+
+### Voice and Audio
+
+- Browser voice input and speech output (requires browser and device support)
+- Full-screen voice mode with "repeat that" and "stop listening" shortcuts
+- Any installed browser voice, saved per profile, with speed, pitch, and mute controls
+- Default voice prefers a feminine-sounding English voice when available
+- Voice preview and copy-last-reply action
+- Optional microphone-reactive core visualizer; microphone access is requested only when enabled and stops when disabled or when voice mode exits
+
+### Interface
+
+- Cinematic boot sequence: optional, non-blocking, and respects the reduced-motion preference
+- Eight saved HUD themes: deep blue, arctic cyan, violet, amber, rose, emerald, crimson, solar gold
+- Network status indicator separating offline tools from features that need internet
+- Screen capture preview, permission-based; screenshots stay in the browser
+
+### System and Diagnostics
+
+- Live host CPU utilization, plus GPU utilization when `nvidia-smi` (NVIDIA) or `rocm-smi` (AMD) is installed. Readings come from the local Node server
+- Local diagnostics: speech support, connection state, CPU/GPU readings, session uptime, command count, and storage usage
+
+### Offline and Installable
+
+- Installable app shell. Open EVA once while online, then install it from the browser's install menu
+- Chat, news, weather, and maps still need their respective server or internet access
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+K` | Focus chat |
+| `Escape` | Close the assistant menu |
+| `Ctrl+Shift+V` | Activate full-screen voice mode |
+
+---
+
+## Try These Commands
+
+| Category | Examples |
+| --- | --- |
+| Briefing | `brief me`, `what should I focus on today` |
+| Memory | `remember that I prefer concise answers`, `what do you remember?`, `what did I save about the trip?` |
+| Tasks | `create a task: review the release`, `list tasks`, `complete task 1` |
+| Notes | `save a note: launch checklist`, `read my last note` |
+| Reminders | `remind me tomorrow to call Sam`, `remind me to stretch in 10 seconds` |
+| Timers | `set a timer for 5 minutes`, `cancel timers` |
+| Time | `What time is it in Tokyo?`, `What time is it in America/Argentina/Buenos_Aires?` |
+| Conversion | `convert 5 miles to km` |
+| Random | `random number between 1 and 100` |
+| Profile | `my name is ...` |
+
+To add profiles or choose a voice for each, open Agent Tools.
+
+---
+
+## Limitations
+
+- **Browser permissions** govern the microphone, location, and screen capture.
+- **Timers need the tab.** Browser timers cannot run after the app is fully closed. Desktop notifications are best effort and browser-dependent; completed timers are detected when the page next runs.
+- **Speech recognition** availability and offline behavior vary by browser.
+- **Hardware metrics** come from the host running the Node server, not the browser's device.
+- **Not connected:** hardware control, email, calendar, and OS-level automation.
+
+---
+
+## Development Notes
+
+- Keep HTML, CSS, and JavaScript in separate files. Do not merge them.
 - Keep modules separated for stability and scaling.
-- The Node server serves the browser app from `public/`.
-- Browser permission prompts govern microphone, location, and screen capture. The system monitor reads CPU counters from the host running the Node server; GPU utilization requires NVIDIA `nvidia-smi` or AMD `rocm-smi`. Hardware control, email, calendar, and OS-level automation are not connected.
-- Browser timers cannot run after the app is fully closed; desktop notifications are best effort and browser-dependent. Completed timers are detected when the page next runs.
-- The microphone visualizer needs browser microphone permission and Web Audio support. Browser speech recognition availability and offline behavior vary by browser; weather, news, maps, and web search require internet access.
-- Run `npm test` for the focused server and local-calculation regression tests.
-- Try “brief me”, “what did I save about the trip?”, “remind me tomorrow to call Sam”, “remember that I prefer concise answers”, “what do you remember?”, “create a task: review the release”, “list tasks”, “complete task 1”, “save a note: launch checklist”, and “read my last note”. Briefings, saved-data searches, and date-based reminders use local browser data only and make no API requests. The briefing does not infer priorities beyond highlighting due dates. Add profiles in Agent Tools, select a different voice for each, and switch profiles there or say “my name is …” to update the active profile name. Profile data is specific to this browser and can be cleared through its site-storage settings.
-- Ask “What time is it in Tokyo?” or use an IANA time zone such as “What time is it in America/Argentina/Buenos_Aires?”. World-clock answers use the browser’s built-in time-zone data and do not require an API key.
+- Run `npm test` before committing. It covers focused server and local-calculation regression tests.
